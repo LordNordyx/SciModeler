@@ -10,6 +10,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: ${{ matrix.name }}
@@ -34,7 +38,17 @@ jobs:
 
       - name: Test and package
         shell: bash
-        run: ./gradlew test packageDistributionForCurrentOS --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew test packageDistributionForCurrentOS --no-daemon 2>&1 | tee build.log
+
+      - name: Report errors
+        if: failure()
+        shell: bash
+        run: |
+          grep -E "^e: |error:|FAILED|What went wrong|Exception" build.log | head -60 | while IFS= read -r line; do
+            echo "::error::${line}"
+          done
 
       - uses: actions/upload-artifact@v4
         with:

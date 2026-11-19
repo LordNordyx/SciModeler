@@ -275,6 +275,8 @@ private fun CanvasArea(state: EditorState, modifier: Modifier) {
     BoxWithConstraints(modifier.fillMaxHeight().background(Ui.canvas)) {
         val sc = scene
         if (sc == null) return@BoxWithConstraints
+        val boxW = maxWidth
+        val boxH = maxHeight
         val availW = maxWidth.value - 80f
         val availH = maxHeight.value - 110f
         val fitZoom = min(availW / sc.width, availH / sc.height).coerceIn(0.1f, 2f)
@@ -288,7 +290,7 @@ private fun CanvasArea(state: EditorState, modifier: Modifier) {
         val hs = rememberScrollState()
         Box(Modifier.fillMaxSize().verticalScroll(vs).horizontalScroll(hs)) {
             Box(
-                Modifier.defaultMinSize(minWidth = maxWidth, minHeight = maxHeight).padding(40.dp),
+                Modifier.defaultMinSize(minWidth = boxW, minHeight = boxH).padding(40.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Box(

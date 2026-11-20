@@ -42,8 +42,11 @@ fun File.writeAtomically(text: String) {
 
 enum class MotionPref(val label: String) { SYSTEM("Follow system"), REDUCED("Reduced"), FULL("Full") }
 
+enum class GlassPref(val label: String) { SYSTEM("Follow system"), SOLID("Solid"), GLASS("Glass") }
+
 data class AppSettings(
     val motion: MotionPref = MotionPref.SYSTEM,
+    val glass: GlassPref = GlassPref.SYSTEM,
     val exportWidthCm: Float = 16f,
     val exportDpi: Int = 300,
 )
@@ -56,13 +59,14 @@ object SettingsStore {
         val m = Json.parse(file.readText()) as Map<String, Any?>
         AppSettings(
             motion = runCatching { MotionPref.valueOf(m["motion"] as String) }.getOrDefault(MotionPref.SYSTEM),
+            glass = runCatching { GlassPref.valueOf(m["glass"] as String) }.getOrDefault(GlassPref.SYSTEM),
             exportWidthCm = (m["exportWidthCm"] as? Number)?.toFloat() ?: 16f,
             exportDpi = (m["exportDpi"] as? Number)?.toInt() ?: 300,
         )
     }.getOrDefault(AppSettings())
 
     fun save(s: AppSettings) = runCatching {
-        file.writeAtomically(Json.write(mapOf("motion" to s.motion.name, "exportWidthCm" to s.exportWidthCm, "exportDpi" to s.exportDpi)))
+        file.writeAtomically(Json.write(mapOf("motion" to s.motion.name, "glass" to s.glass.name, "exportWidthCm" to s.exportWidthCm, "exportDpi" to s.exportDpi)))
     }
 }
 
@@ -110,6 +114,23 @@ object IconStore {
         .joinToString("") { "%02x".format(it) }
 }
 
+/** Reads the operating system's "reduce transparency" preference where it is available. */
+object SystemTransparency {
+    val prefersSolid: Boolean by lazy {
+        runCatching {
+            when {
+                AppDirs.isMac -> SystemMotion.run("defaults", "read", "com.apple.universalaccess", "reduceTransparency").trim() == "1"
+                AppDirs.isWindows -> {
+                    // Settings → Personalisation → Colours → Transparency effects.
+                    val out = SystemMotion.run("reg", "query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "/v", "EnableTransparency")
+                    Regex("EnableTransparency\\s+REG_DWORD\\s+0x(\\d+)").find(out)?.groupValues?.get(1) == "0"
+                }
+                else -> false
+            }
+        }.getOrDefault(false)
+    }
+}
+
 /** Reads the operating system's "reduce motion" preference where it is available. */
 object SystemMotion {
     val prefersReduced: Boolean by lazy {
@@ -126,7 +147,7 @@ object SystemMotion {
         }.getOrDefault(false)
     }
 
-    private fun run(vararg cmd: String): String {
+    fun run(vararg cmd: String): String {
         val p = ProcessBuilder(*cmd).redirectErrorStream(true).start()
         if (!p.waitFor(1500, TimeUnit.MILLISECONDS)) { p.destroy(); return "" }
         return p.inputStream.bufferedReader().readText()

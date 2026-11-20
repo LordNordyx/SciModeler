@@ -19,6 +19,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import scimodeler.core.Images
+import scimodeler.core.GlassPref
 import scimodeler.core.MotionPref
 import scimodeler.core.SessionStore
 import scimodeler.core.SettingsStore
@@ -47,7 +48,7 @@ class UiFlowTest {
     private val t0 = System.currentTimeMillis()
     private fun step(msg: String) = println("STEP +${(System.currentTimeMillis() - t0) / 1000}s $msg")
 
-    private fun DesktopComposeUiTest.settle() = repeat(8) { Thread.sleep(150); waitForIdle() }
+    private fun DesktopComposeUiTest.settle() = repeat(3) { Thread.sleep(120); waitForIdle() }
 
     private fun DesktopComposeUiTest.shot(name: String) {
         step("shot $name")
@@ -91,6 +92,11 @@ class UiFlowTest {
     fun mainFlows() {
         val home = Files.createTempDirectory("scimodeler-home").toFile()
         System.setProperty("scimodeler.home", home.absolutePath)
+        // CI machines without a GPU render blur in software, which is very slow on Windows runners;
+        // use solid panels there (macOS runs keep testing the glass effect).
+        if (System.getProperty("os.name").lowercase().contains("win")) {
+            SettingsStore.save(SettingsStore.load().copy(glass = GlassPref.SOLID))
+        }
 
         // A non-square "logo" to verify proportions are preserved.
         val logo = File(home, "logo.png")

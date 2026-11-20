@@ -70,7 +70,9 @@ import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import scimodeler.core.GlassPref
 import scimodeler.core.MotionPref
+import scimodeler.core.SystemTransparency
 import scimodeler.core.Renderer
 import scimodeler.core.SystemMotion
 import scimodeler.core.Templates
@@ -113,6 +115,11 @@ fun AppRoot(state: EditorState, dialogs: Dialogs, ui: UiState, onReady: (Actions
         MotionPref.REDUCED -> true
         MotionPref.FULL -> false
     }
+    val solid = when (actions.settings.glass) {
+        GlassPref.SYSTEM -> SystemTransparency.prefersSolid
+        GlassPref.SOLID -> true
+        GlassPref.GLASS -> false
+    }
     val haze = remember { HazeState() }
     val canvas = remember { CanvasState() }
 
@@ -122,14 +129,14 @@ fun AppRoot(state: EditorState, dialogs: Dialogs, ui: UiState, onReady: (Actions
         withContext(Dispatchers.IO) { actions.saveSession() }
     }
 
-    CompositionLocalProvider(LocalMotion provides MotionSpec(!reduced), LocalHaze provides haze) {
+    CompositionLocalProvider(LocalMotion provides MotionSpec(!reduced), LocalHaze provides (if (solid) null else haze)) {
         MaterialTheme(colorScheme = Tok.colorScheme, typography = Tok.typography) {
             Box(Modifier.fillMaxSize().background(Tok.C.canvasBrush)) {
                 val g = Tok.S.gutter
                 val panelTop = g + Tok.Layout.topBar + g
                 CanvasView(
                     state, canvas,
-                    Modifier.fillMaxSize().hazeSource(haze),
+                    if (solid) Modifier.fillMaxSize() else Modifier.fillMaxSize().hazeSource(haze),
                     padStart = g + Tok.Layout.gallery, padEnd = g + Tok.Layout.inspector, padTop = panelTop,
                 )
                 TopBar(state, actions, ui, Modifier.align(Alignment.TopCenter).padding(g).fillMaxWidth().height(Tok.Layout.topBar))
@@ -257,6 +264,18 @@ private fun TopBar(state: EditorState, actions: Actions, ui: UiState, modifier: 
                             },
                             onClick = { actions.updateSettings { it.copy(motion = p) }; settingsMenu = false },
                             modifier = Modifier.testTag("motion-${p.name.lowercase()}"),
+                        )
+                    }
+                    HorizontalDivider(color = Tok.C.line, modifier = Modifier.padding(vertical = 4.dp))
+                    Text("Panels", style = Tok.T.caption, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                    GlassPref.entries.forEach { p ->
+                        DropdownMenuItem(
+                            text = { Text(p.label, style = Tok.T.body) },
+                            leadingIcon = {
+                                RadioButton(actions.settings.glass == p, onClick = null, colors = RadioButtonDefaults.colors(selectedColor = Tok.C.accent))
+                            },
+                            onClick = { actions.updateSettings { it.copy(glass = p) }; settingsMenu = false },
+                            modifier = Modifier.testTag("glass-${p.name.lowercase()}"),
                         )
                     }
                     HorizontalDivider(color = Tok.C.line, modifier = Modifier.padding(vertical = 4.dp))

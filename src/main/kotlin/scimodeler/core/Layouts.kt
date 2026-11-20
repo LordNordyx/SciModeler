@@ -49,8 +49,18 @@ fun Ctx.wheel(): Size {
             val sn = kotlin.math.abs(sin(rad(mid))).toFloat()
             val cs = kotlin.math.abs(cos(rad(mid))).toFloat()
             val maxW = min(chord, sn * chord + cs * (R - r - 10f) * 0.86f)
-            val f = fit(m, items[i].label, maxW, (R - r) * 0.72f, 20f * s, 10f, bold = true)
-            text(f.lines, px(cx, midR, mid), py(cy, midR, mid), f.size, onColor(c), bold = true)
+            val sx = px(cx, midR, mid); val sy = py(cy, midR, mid)
+            if (icons) {
+                val iz = min(34f, (R - r) * 0.26f) * s.coerceAtMost(1.2f)
+                val f = fit(m, items[i].label, maxW, (R - r) * 0.5f, 18f * s, 9.5f, bold = true)
+                val th = f.lines.size * f.size * 1.22f
+                val top = sy - (iz + 6f + th) / 2f
+                itemIcon(i, sx, top + iz / 2f, iz, onColor(c))
+                text(f.lines, sx, top + iz + 6f + th / 2f, f.size, onColor(c), bold = true)
+            } else {
+                val f = fit(m, items[i].label, maxW, (R - r) * 0.72f, 20f * s, 10f, bold = true)
+                text(f.lines, sx, sy, f.size, onColor(c), bold = true)
+            }
             reqs += CalloutReq(i, px(cx, ring, mid), py(cy, ring, mid), sideOf(mid), py(cy, ring + 40f, mid))
         }
         val hub = PathData.circle(cx, cy, r)
@@ -128,8 +138,16 @@ private fun Ctx.radialNodes(hub: Boolean): Size {
             val node = PathData.circle(nx, ny, nodeR)
             shadow(node)
             shape(node, fill(c, nx, ny - nodeR, nx, ny + nodeR), Ink.white, 4f)
-            val f = fit(m, items[i].label, nodeR * 1.62f, nodeR * 1.3f, 18f * s, 9.5f, bold = true)
-            text(f.lines, nx, ny, f.size, onColor(c), bold = true)
+            if (icons) {
+                val iz = nodeR * 0.62f
+                if (items[i].image != null) shape(PathData.circle(nx, ny - nodeR * 0.3f, iz * 0.62f), Paint.Solid(Ink.white))
+                itemIcon(i, nx, ny - nodeR * 0.3f, if (items[i].image != null) iz * 0.85f else iz, onColor(c))
+                val f = fit(m, items[i].label, nodeR * 1.5f, nodeR * 0.6f, 15f * s, 8.5f, bold = true)
+                text(f.lines, nx, ny + nodeR * 0.36f, f.size, onColor(c), bold = true)
+            } else {
+                val f = fit(m, items[i].label, nodeR * 1.62f, nodeR * 1.3f, 18f * s, 9.5f, bold = true)
+                text(f.lines, nx, ny, f.size, onColor(c), bold = true)
+            }
             reqs += CalloutReq(i, px(nx, nodeR + 4f, a), py(ny, nodeR + 4f, a), sideOf(a), ny, nx, ny, nodeR)
         }
     }
@@ -366,7 +384,11 @@ fun Ctx.matrix(): Size {
         val alignRight = quad && col == 1
         val tx = if (alignRight) x + cellW - pad else x + pad
         val ty = if (quad && row == 1) y + pad + 30f else y + pad
-        val lab = fit(m, items[i].label, cellW - pad * 2, 200f, 21f * s, 11f, bold = true)
+        val lab = fit(m, items[i].label, cellW - pad * 2 - (if (icons) 44f else 0f), 200f, 21f * s, 11f, bold = true)
+        if (icons) {
+            val ix = if (alignRight) x + pad + 18f else x + cellW - pad - 18f
+            itemIcon(i, ix, ty + 16f, 34f, withAlpha(fg, 0.9f))
+        }
         add(Prim.Text(lab.lines, tx, ty, lab.size, fg, bold = true,
             align = if (alignRight) Align.END else Align.START, vCenter = false))
         if (style.showCallouts) {
@@ -402,7 +424,7 @@ fun Ctx.layers(): Size {
         val bh = if (style.showCallouts) bullets(items[i].bullets, 0f, 0f, descW, 0, 0, null, false) else 0f
         val lab = fit(m, items[i].label, labelW - pad * 2, 400f, 21f * s, 11f, bold = true)
         val labH = lab.lines.size * lab.size * 1.22f
-        val h = max(84f, max(bh, labH) + pad * 2)
+        val h = max(if (icons) 112f else 84f, max(bh, labH + (if (icons) 38f else 0f)) + pad * 2)
         val whole = PathData.roundRect(0f, y, totalW, h, 18f)
         shadow(whole, 0.7f)
         shape(whole, Paint.Solid(lighten(c, 0.88f)))
@@ -413,7 +435,14 @@ fun Ctx.layers(): Size {
             .arc(18f, y + h - 18f, 18f, 90f, 180f, move = false)
             .close()
         shape(lp, fill(c, 0f, y, labelW, y + h))
-        text(lab.lines, labelW / 2f, y + h / 2f, lab.size, onColor(c), bold = true)
+        if (icons && h >= 84f) {
+            val iz = 30f
+            val total = iz + 8f + labH
+            itemIcon(i, labelW / 2f, y + (h - total) / 2f + iz / 2f, iz, onColor(c))
+            text(lab.lines, labelW / 2f, y + (h - total) / 2f + iz + 8f + labH / 2f, lab.size, onColor(c), bold = true)
+        } else {
+            text(lab.lines, labelW / 2f, y + h / 2f, lab.size, onColor(c), bold = true)
+        }
         if (bh > 0f) {
             bullets(items[i].bullets, labelW + pad, y + (h - bh) / 2f, descW, Ink.text, c, lighten(c, 0.45f), true)
         }

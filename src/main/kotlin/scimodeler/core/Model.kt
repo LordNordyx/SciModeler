@@ -2,26 +2,17 @@ package scimodeler.core
 
 import java.util.concurrent.atomic.AtomicLong
 
-enum class LayoutType(
-    val title: String,
-    val description: String,
-    val usesCenter: Boolean,
-    val maxItems: Int = 12,
-) {
-    WHEEL("Wheel", "Segments around a central concept", usesCenter = true),
-    CYCLE("Cycle", "Stages that repeat in a loop", usesCenter = true),
-    HUB("Hub & spoke", "Factors linked to a core concept", usesCenter = true),
-    ONION("Concentric", "Nested levels, e.g. socio-ecological", usesCenter = true),
-    PROCESS("Process", "Sequential steps, left to right", usesCenter = true),
-    PYRAMID("Pyramid", "Hierarchy from top to base", usesCenter = false),
-    VENN("Venn", "Overlapping concepts (2–4)", usesCenter = true, maxItems = 4),
-    MATRIX("Matrix", "Grid or 2×2 of categories", usesCenter = true),
-    LAYERS("Layers", "Stacked levels with descriptions", usesCenter = false),
-}
-
 object Ids {
     private val counter = AtomicLong(System.currentTimeMillis())
     fun next(): Long = counter.incrementAndGet()
+}
+
+/** Where an item sits in models that distinguish groups (e.g. independent vs dependent variables). */
+enum class Role(val label: String) {
+    AUTO("Auto"),
+    INPUT("Input"),
+    OUTPUT("Output"),
+    CONTEXT("Context"),
 }
 
 data class Item(
@@ -30,6 +21,11 @@ data class Item(
     val bullets: List<String> = emptyList(),
     /** ARGB colour override; null = take colour from the theme. */
     val color: Int? = null,
+    /** Built-in icon id ([IconLibrary]); null = the default icon for this position. */
+    val icon: String? = null,
+    /** Custom icon as base64-encoded PNG; overrides [icon]. */
+    val image: String? = null,
+    val role: Role = Role.AUTO,
 )
 
 data class Style(
@@ -39,6 +35,7 @@ data class Style(
     val showTitle: Boolean = true,
     val showCallouts: Boolean = true,
     val showLegend: Boolean = true,
+    val showIcons: Boolean = true,
     val shadows: Boolean = true,
     val gradients: Boolean = true,
     /** Rotation in degrees for circular layouts. */
@@ -52,6 +49,14 @@ data class ModelDoc(
     val center: String = "",
     val items: List<Item> = emptyList(),
     val legend: String = "",
-    val layout: LayoutType = LayoutType.WHEEL,
+    /** Id of a [ModelSpec] in [Models]. */
+    val layout: String = "wheel",
+    /** Optional custom captions for item groups (see [ModelSpec.groups]). */
+    val groupNames: List<String> = emptyList(),
     val style: Style = Style(),
-)
+) {
+    val spec: ModelSpec get() = Models.get(layout)
+
+    fun groupName(index: Int): String =
+        groupNames.getOrNull(index)?.takeIf { it.isNotBlank() } ?: spec.groups.getOrElse(index) { "" }
+}

@@ -86,4 +86,14 @@ class EditorState(initial: ModelDoc) {
     }
 
     val displayName: String get() = file?.nameWithoutExtension ?: doc.title.ifBlank { "Untitled" }
+
+    fun index(itemId: Long): Int = doc.items.indexOfFirst { it.id == itemId }
+
+    fun moveItem(index: Int, delta: Int) = update { d ->
+        val list = d.items.toMutableList()
+        val target = index + delta
+        if (target !in list.indices) return@update d
+        list.add(target, list.removeAt(index))
+        d.copy(items = list)
+    }
 }

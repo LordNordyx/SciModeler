@@ -9,7 +9,19 @@ interface Measure {
 }
 
 object Fonts {
+    /** Registers the bundled Inter font with Java2D so diagrams look the same on every computer. */
+    private val bundled: Unit by lazy {
+        listOf("Inter-Regular.ttf", "Inter-Medium.ttf", "Inter-SemiBold.ttf", "Inter-Bold.ttf").forEach { name ->
+            runCatching {
+                Fonts::class.java.getResourceAsStream("/fonts/$name")?.use {
+                    GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(Font.createFont(Font.TRUETYPE_FONT, it))
+                }
+            }
+        }
+    }
+
     val available: List<String> by lazy {
+        bundled
         runCatching { GraphicsEnvironment.getLocalGraphicsEnvironment().availableFontFamilyNames.toList() }
             .getOrDefault(emptyList())
     }

@@ -7,7 +7,8 @@ plugins {
 }
 
 group = "si.lordnordyx.scimodeler"
-version = "1.0.0"
+val appVersion = providers.gradleProperty("appVersion").get()
+version = appVersion
 
 repositories {
     mavenCentral()
@@ -19,12 +20,18 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
     implementation(compose.materialIconsExtended)
-    testImplementation(kotlin("test"))
+    implementation("dev.chrisbanes.haze:haze:1.2.2")
+
+    testImplementation(kotlin("test-junit"))
+    testImplementation(compose.desktop.uiTestJUnit4)
+    testImplementation(compose.desktop.currentOs)
 }
 
 tasks.test {
-    useJUnitPlatform()
-    systemProperty("java.awt.headless", "true")
+    useJUnit()
+    // UI tests render offscreen; screenshots of the main flows land in build/screenshots.
+    systemProperty("scimodeler.screenshots", layout.buildDirectory.dir("screenshots").get().asFile.absolutePath)
+    testLogging { events("passed", "failed"); showStandardStreams = true; exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL }
 }
 
 compose.desktop {
@@ -35,12 +42,13 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "SciModeler"
-            packageVersion = "1.0.0"
+            packageVersion = appVersion
             description = "Editor for scientific models and diagrams"
             vendor = "LordNordyx"
             modules("java.desktop", "java.datatransfer")
 
             windows {
+                iconFile.set(project.file("packaging/icon.ico"))
                 menu = true
                 shortcut = true
                 perUserInstall = true
@@ -48,7 +56,9 @@ compose.desktop {
                 menuGroup = "SciModeler"
                 upgradeUuid = "8a0c6f2e-4b7d-4d3e-9a51-5c2f1e7b9d40"
             }
+            linux { iconFile.set(project.file("packaging/icon.png")) }
             macOS {
+                iconFile.set(project.file("packaging/icon.icns"))
                 bundleID = "si.lordnordyx.scimodeler"
                 appCategory = "public.app-category.productivity"
             }

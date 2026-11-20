@@ -42,11 +42,17 @@ class PathData(val cmds: MutableList<Cmd> = ArrayList()) {
         }
     }
 
-    fun translated(dx: Float, dy: Float) = PathData(cmds.mapTo(ArrayList()) {
+    fun translated(dx: Float, dy: Float) = transformed { x, y -> (x + dx) to (y + dy) }
+
+    /** Applies an affine point mapping (translate/scale/rotate keep Béziers exact). */
+    fun transformed(f: (Float, Float) -> Pair<Float, Float>) = PathData(cmds.mapTo(ArrayList()) {
         when (it) {
-            is Cmd.M -> Cmd.M(it.x + dx, it.y + dy)
-            is Cmd.L -> Cmd.L(it.x + dx, it.y + dy)
-            is Cmd.C -> Cmd.C(it.x1 + dx, it.y1 + dy, it.x2 + dx, it.y2 + dy, it.x + dx, it.y + dy)
+            is Cmd.M -> f(it.x, it.y).let { (x, y) -> Cmd.M(x, y) }
+            is Cmd.L -> f(it.x, it.y).let { (x, y) -> Cmd.L(x, y) }
+            is Cmd.C -> {
+                val (a, b) = f(it.x1, it.y1); val (c, d) = f(it.x2, it.y2); val (e, g) = f(it.x, it.y)
+                Cmd.C(a, b, c, d, e, g)
+            }
             Cmd.Z -> Cmd.Z
         }
     })
@@ -88,6 +94,9 @@ sealed interface Paint {
 enum class Align { START, CENTER, END }
 
 sealed interface Prim {
+    /** A raster image (base64 PNG) drawn into the box (x, y, w, h). The box already has the image's aspect ratio. */
+    data class Image(val base64: String, val x: Float, val y: Float, val w: Float, val h: Float) : Prim
+
     data class Shape(
         val path: PathData,
         val fill: Paint? = null,
@@ -129,6 +138,7 @@ fun Prim.translated(dx: Float, dy: Float): Prim = when (this) {
         },
     )
     is Prim.Text -> copy(x = x + dx, y = y + dy)
+    is Prim.Image -> copy(x = x + dx, y = y + dy)
 }
 
 class Scene(val width: Float, val height: Float, val background: Int?, val prims: List<Prim>, val fontFamily: String)

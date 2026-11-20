@@ -7,7 +7,9 @@ class Ctx(val doc: ModelDoc, val m: Measure) {
     val style = doc.style
     val theme = Themes.get(style.theme)
     val s = style.textScale.coerceIn(0.6f, 1.8f)
-    val items: List<Item> = doc.items.take(doc.layout.maxItems)
+    val spec: ModelSpec = doc.spec
+    val items: List<Item> = doc.items.take(spec.maxItems)
+    val icons: Boolean get() = style.showIcons && spec.usesIcons
     var prims = ArrayList<Prim>()
 
     fun color(i: Int): Int = items[i].color ?: theme.colors[i % theme.colors.size]
@@ -54,6 +56,87 @@ class Ctx(val doc: ModelDoc, val m: Measure) {
         shape(PathData.circle(x, y, radius), fill(c, x, y - radius, x, y + radius))
     }
 
+    // ---------- Icons ----------
+
+    fun iconDef(i: Int): IconDef = IconLibrary.get(items[i].icon) ?: IconLibrary.defaultFor(i)
+
+    /** Draws a built-in icon centred at (cx, cy), [size] wide. */
+    fun glyph(def: IconDef, cx: Float, cy: Float, size: Float, color: Int, weight: Float = 2f) {
+        val k = size / 24f
+        val f: (Float, Float) -> Pair<Float, Float> = { x, y -> (cx + (x - 12f) * k) to (cy + (y - 12f) * k) }
+        def.pen.strokes.forEach { add(Prim.Shape(it.transformed(f), stroke = color, strokeWidth = weight * k)) }
+        def.pen.fills.forEach { add(Prim.Shape(it.transformed(f), fill = Paint.Solid(color))) }
+    }
+
+    /** Draws a custom image contained (proportions preserved) in a [side]×[side] box centred at (cx, cy). */
+    fun picture(base64: String, cx: Float, cy: Float, side: Float) {
+        val (w, h) = Images.fit(base64, side)
+        add(Prim.Image(base64, cx - w / 2f, cy - h / 2f, w, h))
+    }
+
+    /** The item's icon (custom image or built-in glyph). */
+    fun itemIcon(i: Int, cx: Float, cy: Float, size: Float, color: Int) {
+        val img = items[i].image
+        if (img != null) picture(img, cx, cy, size) else glyph(iconDef(i), cx, cy, size, color)
+    }
+
+    /**
+     * Round node with the item's icon. [outlined] = white disc with a coloured ring,
+     * otherwise a filled disc with a white icon. Custom images always sit on white.
+     */
+    fun iconNode(i: Int, cx: Float, cy: Float, r: Float, outlined: Boolean, iconScale: Float = 1f) {
+        val c = color(i)
+        val disc = PathData.circle(cx, cy, r)
+        shadow(disc, 0.7f)
+        if (outlined || items[i].image != null) {
+            shape(disc, Paint.Solid(Ink.white), c, max(3f, r * 0.12f))
+            itemIcon(i, cx, cy, r * 1.05f * iconScale, darken(c, 0.05f))
+        } else {
+            shape(disc, fill(c, cx, cy - r, cx, cy + r), Ink.white, 3f)
+            itemIcon(i, cx, cy, r * 1.0f * iconScale, onColor(c))
+        }
+    }
+
+    // ---------- Connectors ----------
+
+    /** Polyline with an arrowhead at the last point. */
+    fun arrow(pts: List<Pair<Float, Float>>, c: Int, width: Float = 4f, head: Float = width * 3.2f, dash: List<Float>? = null) {
+        if (pts.size < 2) return
+        val (x1, y1) = pts[pts.size - 2]
+        val (x2, y2) = pts.last()
+        val len = kotlin.math.hypot(x2 - x1, y2 - y1).coerceAtLeast(0.001f)
+        val ux = (x2 - x1) / len; val uy = (y2 - y1) / len
+        val bx = x2 - ux * head; val by = y2 - uy * head
+        val path = PathData()
+        pts.forEachIndexed { k, (x, y) ->
+            val (px, py) = if (k == pts.lastIndex) bx + ux * 1f to by + uy * 1f else x to y
+            if (k == 0) path.moveTo(px, py) else path.lineTo(px, py)
+        }
+        add(Prim.Shape(path, stroke = c, strokeWidth = width, dash = dash))
+        val nx = -uy; val ny = ux
+        shape(PathData.polygon(x2 to y2, (bx + nx * head * 0.62f) to (by + ny * head * 0.62f),
+            (bx - nx * head * 0.62f) to (by - ny * head * 0.62f)), Paint.Solid(c))
+    }
+
+    // ---------- Text blocks ----------
+
+    /** Heading (item label) + description points. Returns height; draws only if [draw]. */
+    fun textBlock(i: Int, x: Float, y: Float, w: Float, draw: Boolean, align: Align = Align.START, labelSize: Float = 18f * s): Float {
+        val c = color(i)
+        val lab = wrap(m, items[i].label, w, labelSize, true)
+        val lh = lab.size * labelSize * 1.2f
+        if (draw) {
+            val ax = when (align) { Align.START -> x; Align.CENTER -> x + w / 2f; Align.END -> x + w }
+            add(Prim.Text(lab, ax, y, labelSize, readable(c), bold = true, align = align, lineHeight = 1.2f, vCenter = false))
+        }
+        if (!style.showCallouts || items[i].bullets.none { it.isNotBlank() }) return lh
+        val bh = bullets(items[i].bullets, x, y + lh + 6f, w, Ink.subtle, c, null, draw, end = align == Align.END)
+        return lh + 6f + bh
+    }
+
+    /** A version of [c] dark enough to be read as text on white. */
+    fun readable(c: Int): Int = if (luminance(c) > 0.33) darken(c, 0.32f) else c
+
     // ---------- Bullet lists ----------
 
     val bulletSize get() = 15f * s
@@ -65,7 +148,7 @@ class Ctx(val doc: ModelDoc, val m: Measure) {
      */
     fun bullets(
         list: List<String>, x: Float, y: Float, w: Float, textColor: Int, dotColor: Int,
-        separator: Int?, draw: Boolean, size: Float = bulletSize,
+        separator: Int?, draw: Boolean, size: Float = bulletSize, end: Boolean = false,
     ): Float {
         val clean = list.map { it.trim() }.filter { it.isNotEmpty() }
         if (clean.isEmpty()) return 0f
@@ -76,10 +159,11 @@ class Ctx(val doc: ModelDoc, val m: Measure) {
             val lines = wrap(m, b, w - indent, size, false)
             val h = lines.size * size * bulletLh
             if (draw) {
-                add(Prim.Text(listOf("•"), x + size * 0.15f, cy, size * 1.15f, dotColor, bold = true,
-                    align = Align.START, lineHeight = bulletLh * size / (size * 1.15f), vCenter = false))
-                add(Prim.Text(lines, x + indent, cy, size, textColor, align = Align.START,
-                    lineHeight = bulletLh, vCenter = false))
+                val dotX = if (end) x + w - size * 0.15f else x + size * 0.15f
+                add(Prim.Text(listOf("•"), dotX, cy, size * 1.15f, dotColor, bold = true,
+                    align = if (end) Align.END else Align.START, lineHeight = bulletLh * size / (size * 1.15f), vCenter = false))
+                add(Prim.Text(lines, if (end) x + w - indent else x + indent, cy, size, textColor,
+                    align = if (end) Align.END else Align.START, lineHeight = bulletLh, vCenter = false))
             }
             cy += h
             if (i < clean.lastIndex) {
@@ -135,9 +219,12 @@ class CalloutReq(
  * Places a diagram (drawn in its own local space [diagW]×[diagH]) between columns of callout cards.
  * Anchor coordinates in [reqs] are in the diagram's local space.
  */
-fun Ctx.withCallouts(diagW: Float, diagH: Float, reqs: List<CalloutReq>, diagram: List<Prim>): Size {
-    val active = if (style.showCallouts) reqs.filter { calloutHeight(it.item) > 0f } else emptyList()
-    val heights = active.associate { it.item to calloutHeight(it.item) }
+fun Ctx.withCallouts(diagW: Float, diagH: Float, reqs: List<CalloutReq>, diagram: List<Prim>, plain: Boolean = false): Size {
+    val active = if (plain) reqs.toList()
+        else if (style.showCallouts) reqs.filter { calloutHeight(it.item) > 0f } else emptyList()
+    val heights = active.associate {
+        it.item to (if (plain) textBlock(it.item, 0f, 0f, calloutW - 10f, draw = false) + 14f else calloutHeight(it.item))
+    }
     val gap = 18f
     // Balance near-vertical anchors to the emptier side.
     fun total(side: Int) = active.filter { it.side == side }.sumOf { (heights[it.item]!! + gap).toDouble() }.toFloat()
@@ -181,14 +268,21 @@ fun Ctx.withCallouts(diagW: Float, diagH: Float, reqs: List<CalloutReq>, diagram
             val h = heights[rq.item]!!
             val c = color(rq.item)
             val ex = if (side == -1) bx + boxW else bx
-            val ey = tops[k] + h / 2f
+            val ey = if (plain) tops[k] + 2f else tops[k] + h / 2f
             dottedLine(ox + rq.ax, oy + rq.ay, ex, ey, lighten(c, 0.15f))
         }
         col.forEachIndexed { k, rq ->
             val h = heights[rq.item]!!
-            callout(rq.item, bx, tops[k], boxW, h, if (side == -1) 1 else -1)
             val ex = if (side == -1) bx + boxW else bx
-            dot(ex, tops[k] + h / 2f, color(rq.item))
+            if (plain) {
+                val c = color(rq.item)
+                textBlock(rq.item, bx + 5f, tops[k] + 8f, boxW - 10f, draw = true, align = if (side == -1) Align.END else Align.START)
+                shape(PathData.line(bx + 5f, tops[k] + 2f, bx + boxW - 5f, tops[k] + 2f), null, lighten(c, 0.55f), 2f)
+                dot(ex, tops[k] + 2f, c, 6f)
+            } else {
+                callout(rq.item, bx, tops[k], boxW, h, if (side == -1) 1 else -1)
+                dot(ex, tops[k] + h / 2f, color(rq.item))
+            }
         }
     }
     return Size(leftW + diagW + rightW, H)

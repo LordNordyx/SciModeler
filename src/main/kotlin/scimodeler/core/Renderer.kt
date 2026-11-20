@@ -18,17 +18,7 @@ object Renderer {
         val s = ctx.s
         var body = Size(0f, 0f)
         val bodyPrims = ctx.capture {
-            body = when (doc.layout) {
-                LayoutType.WHEEL -> ctx.wheel()
-                LayoutType.CYCLE -> ctx.cycle()
-                LayoutType.HUB -> ctx.hub()
-                LayoutType.ONION -> ctx.onion()
-                LayoutType.PROCESS -> ctx.process()
-                LayoutType.PYRAMID -> ctx.pyramid()
-                LayoutType.VENN -> ctx.venn()
-                LayoutType.MATRIX -> ctx.matrix()
-                LayoutType.LAYERS -> ctx.layers()
-            }
+            body = doc.spec.render(ctx)
         }
         val contentW = max(body.w, 520f)
         val W = contentW + MARGIN * 2
@@ -105,6 +95,13 @@ object Renderer {
                         g.draw(path)
                     }
                 }
+                is Prim.Image -> {
+                    Images.decode(p.base64)?.let { img ->
+                        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+                        val at = AffineTransform(p.w / img.width, 0f, 0f, p.h / img.height, p.x, p.y)
+                        g.drawImage(img, at, null)
+                    }
+                }
                 is Prim.Text -> {
                     val saved: AffineTransform = g.transform
                     if (p.rotation != 0f) g.rotate(rad(p.rotation), p.x.toDouble(), p.y.toDouble())
@@ -159,7 +156,7 @@ object Renderer {
         val family = esc(scene.fontFamily)
         val (sw, sh) = if (widthCm != null) "${n(widthCm)}cm" to "${n(widthCm * scene.height / scene.width)}cm"
             else n(scene.width) to n(scene.height)
-        sb.append("""<svg xmlns="http://www.w3.org/2000/svg" width="$sw" height="$sh" """)
+        sb.append("""<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="$sw" height="$sh" """)
         sb.append("""viewBox="0 0 ${n(scene.width)} ${n(scene.height)}" font-family="'$family', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">""")
         sb.append('\n')
         val bodySb = StringBuilder()
@@ -184,6 +181,10 @@ object Renderer {
                     p.dash?.let { d -> bodySb.append(" stroke-dasharray=\"${d.joinToString(" ") { n(it) }}\"") }
                 }
                 bodySb.append("/>\n")
+            }
+            is Prim.Image -> {
+                val href = "data:image/png;base64,${p.base64}"
+                bodySb.append("""<image x="${n(p.x)}" y="${n(p.y)}" width="${n(p.w)}" height="${n(p.h)}" preserveAspectRatio="xMidYMid meet" href="$href" xlink:href="$href"/>""").append('\n')
             }
             is Prim.Text -> {
                 val anchor = when (p.align) { Align.START -> "start"; Align.CENTER -> "middle"; Align.END -> "end" }

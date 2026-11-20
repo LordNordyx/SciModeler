@@ -110,24 +110,34 @@ object Json {
 object DocIO {
     const val EXT = "scimodel"
 
-    fun toJson(d: ModelDoc): String = Json.write(mapOf(
+    fun toJson(d: ModelDoc): String = Json.write(toMap(d))
+
+    fun toMap(d: ModelDoc): Map<String, Any?> = mapOf(
         "format" to "scimodeler", "version" to 1,
-        "layout" to d.layout.name, "title" to d.title, "subtitle" to d.subtitle,
+        "layout" to d.layout, "title" to d.title, "subtitle" to d.subtitle, "groupNames" to d.groupNames,
         "center" to d.center, "legend" to d.legend,
-        "items" to d.items.map { mapOf("label" to it.label, "bullets" to it.bullets, "color" to it.color?.let(::toHex)) },
+        "items" to d.items.map {
+            mapOf(
+                "label" to it.label, "bullets" to it.bullets, "color" to it.color?.let(::toHex),
+                "icon" to it.icon, "image" to it.image, "role" to it.role.name,
+            )
+        },
         "style" to with(d.style) {
             mapOf(
                 "theme" to theme, "fontFamily" to fontFamily, "textScale" to textScale,
-                "showTitle" to showTitle, "showCallouts" to showCallouts, "showLegend" to showLegend,
+                "showTitle" to showTitle, "showCallouts" to showCallouts, "showLegend" to showLegend, "showIcons" to showIcons,
                 "shadows" to shadows, "gradients" to gradients, "rotation" to rotation,
                 "transparentBackground" to transparentBackground,
             )
         },
-    ))
+    )
 
     @Suppress("UNCHECKED_CAST")
-    fun fromJson(text: String): ModelDoc {
-        val root = Json.parse(text) as? Map<String, Any?> ?: error("Not a SciModeler file")
+    fun fromJson(text: String): ModelDoc =
+        fromMap(Json.parse(text) as? Map<String, Any?> ?: error("Not a SciModeler file"))
+
+    @Suppress("UNCHECKED_CAST")
+    fun fromMap(root: Map<String, Any?>): ModelDoc {
         fun str(m: Map<String, Any?>, k: String) = m[k] as? String ?: ""
         val st = root["style"] as? Map<String, Any?> ?: emptyMap()
         val def = Style()
@@ -139,12 +149,16 @@ object DocIO {
                 label = str(m, "label"),
                 bullets = (m["bullets"] as? List<Any?>)?.map { it?.toString() ?: "" } ?: emptyList(),
                 color = (m["color"] as? String)?.let { runCatching { hex(it) }.getOrNull() },
+                icon = (m["icon"] as? String)?.takeIf { IconLibrary.get(it) != null },
+                image = (m["image"] as? String)?.takeIf { it.isNotBlank() },
+                role = runCatching { Role.valueOf(m["role"] as? String ?: "AUTO") }.getOrDefault(Role.AUTO),
             )
         }
         return ModelDoc(
             title = str(root, "title"), subtitle = str(root, "subtitle"),
             center = str(root, "center"), legend = str(root, "legend"),
-            layout = runCatching { LayoutType.valueOf(str(root, "layout")) }.getOrDefault(LayoutType.WHEEL),
+            layout = str(root, "layout").lowercase().takeIf { Models.exists(it) } ?: Models.all.first().id,
+            groupNames = (root["groupNames"] as? List<Any?>)?.map { it?.toString() ?: "" } ?: emptyList(),
             items = items,
             style = Style(
                 theme = st["theme"] as? String ?: def.theme,
@@ -153,6 +167,7 @@ object DocIO {
                 showTitle = bool("showTitle", def.showTitle),
                 showCallouts = bool("showCallouts", def.showCallouts),
                 showLegend = bool("showLegend", def.showLegend),
+                showIcons = bool("showIcons", def.showIcons),
                 shadows = bool("shadows", def.shadows),
                 gradients = bool("gradients", def.gradients),
                 rotation = num("rotation", def.rotation),

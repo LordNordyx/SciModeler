@@ -1,8 +1,11 @@
 package scimodeler.ui
 
+import scimodeler.core.AppDirs
 import scimodeler.core.DocIO
 import scimodeler.core.Exporter
+import scimodeler.core.Images
 import scimodeler.core.ModelDoc
+import scimodeler.core.writeAtomically
 import java.awt.FileDialog
 import java.awt.Frame
 import java.awt.Image
@@ -13,16 +16,22 @@ import java.awt.datatransfer.UnsupportedFlavorException
 import java.awt.image.BufferedImage
 import java.io.File
 
-object FileOps {
-    fun chooseOpen(owner: Frame): File? {
-        val d = FileDialog(owner, "Open model", FileDialog.LOAD)
-        d.setFilenameFilter { _, name -> name.endsWith(".${DocIO.EXT}") }
-        d.isVisible = true
-        val name = d.file ?: return null
-        return File(d.directory, name)
+/** Native file choosers. An interface so tests can supply files without a dialog. */
+interface Dialogs {
+    fun openModel(): File?
+    fun saveFile(title: String, suggested: String, ext: String): File?
+    fun pickImage(): File?
+}
+
+/** AWT FileDialog: the native chooser on both Windows and macOS. */
+class AwtDialogs(private val owner: Frame) : Dialogs {
+    override fun openModel(): File? = choose("Open model", FileDialog.LOAD) { it.endsWith(".${DocIO.EXT}", true) }
+
+    override fun pickImage(): File? = choose("Choose an icon image", FileDialog.LOAD) { name ->
+        Images.extensions.any { name.endsWith(".$it", ignoreCase = true) }
     }
 
-    fun chooseSave(owner: Frame, title: String, suggested: String, ext: String): File? {
+    override fun saveFile(title: String, suggested: String, ext: String): File? {
         val d = FileDialog(owner, title, FileDialog.SAVE)
         d.file = "$suggested.$ext"
         d.isVisible = true
@@ -31,16 +40,20 @@ object FileOps {
         return if (f.extension.equals(ext, ignoreCase = true)) f else File(f.parentFile, "${f.name}.$ext")
     }
 
+    private fun choose(title: String, mode: Int, accept: (String) -> Boolean): File? {
+        val d = FileDialog(owner, title, mode)
+        d.setFilenameFilter { _, name -> accept(name) }
+        if (AppDirs.isWindows) d.file = "*.*"
+        d.isVisible = true
+        val name = d.file ?: return null
+        return File(d.directory, name).takeIf { it.isFile }
+    }
+}
+
+object FileOps {
     fun read(file: File): ModelDoc = DocIO.fromJson(file.readText(Charsets.UTF_8))
 
-    fun write(file: File, doc: ModelDoc) {
-        val tmp = File(file.parentFile, ".${file.name}.tmp")
-        tmp.writeText(DocIO.toJson(doc), Charsets.UTF_8)
-        if (!tmp.renameTo(file)) {
-            file.writeText(DocIO.toJson(doc), Charsets.UTF_8)
-            tmp.delete()
-        }
-    }
+    fun write(file: File, doc: ModelDoc) = file.writeAtomically(DocIO.toJson(doc))
 
     fun slug(s: String): String =
         s.trim().replace(Regex("[\\\\/:*?\"<>|]"), "").replace(Regex("\\s+"), "-").take(60).ifBlank { "model" }
@@ -58,5 +71,5 @@ object FileOps {
         Toolkit.getDefaultToolkit().systemClipboard.setContents(t, null)
     }
 
-    val isMac: Boolean = System.getProperty("os.name").orEmpty().lowercase().contains("mac")
+    val isMac: Boolean get() = AppDirs.isMac
 }

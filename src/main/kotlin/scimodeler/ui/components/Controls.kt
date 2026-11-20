@@ -141,6 +141,7 @@ fun IconBtn(
     size: Dp = 34.dp,
     iconSize: Dp = 18.dp,
     tag: String? = null,
+    tipBelow: Boolean = false,
 ) {
     val motion = LocalMotion.current
     val src = remember { MutableInteractionSource() }
@@ -155,7 +156,7 @@ fun IconBtn(
         motion.tween(Tok.Motion.fast),
     )
     val scale by animateFloatAsState(if (st.pressed) 0.92f else 1f, motion.spring())
-    Tip(tip) {
+    Tip(tip, below = tipBelow) {
         Box(
             Modifier.then(if (tag != null) Modifier.testTag(tag) else Modifier)
                 .size(size).scale(scale).clip(shape).background(bg)
@@ -168,7 +169,7 @@ fun IconBtn(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun Tip(text: String, content: @Composable () -> Unit) {
+fun Tip(text: String, below: Boolean = false, content: @Composable () -> Unit) {
     TooltipArea(
         tooltip = {
             Box(Modifier.shadow(8.dp, RoundedCornerShape(8.dp)).clip(RoundedCornerShape(8.dp)).background(Tok.C.tooltip)) {
@@ -176,7 +177,10 @@ fun Tip(text: String, content: @Composable () -> Unit) {
             }
         },
         delayMillis = 500,
-        tooltipPlacement = TooltipPlacement.CursorPoint(offset = DpOffset(0.dp, 20.dp)),
+        // Above the pointer by default: a tooltip squeezed against the window edge would otherwise
+        // overlap the pointer and flicker.
+        tooltipPlacement = if (below) TooltipPlacement.CursorPoint(offset = DpOffset(0.dp, 20.dp))
+            else TooltipPlacement.CursorPoint(offset = DpOffset(0.dp, (-10).dp), alignment = Alignment.TopCenter),
     ) { content() }
 }
 

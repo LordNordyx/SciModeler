@@ -30,7 +30,7 @@ val LocalHaze = staticCompositionLocalOf<HazeState?> { null }
 fun Modifier.glass(
     shape: Shape = RoundedCornerShape(Tok.R.panel),
     tint: Color = Tok.C.glass,
-    elevation: Dp = 18.dp,
+    elevation: Dp = 10.dp,
 ): Modifier {
     val haze = LocalHaze.current
     val base = this

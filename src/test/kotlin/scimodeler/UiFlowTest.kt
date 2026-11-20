@@ -14,6 +14,8 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import scimodeler.core.Images
@@ -52,6 +54,7 @@ class UiFlowTest {
     /** Clicks a node; if the expected result doesn't appear, reports it and falls back to the semantic click. */
     private fun DesktopComposeUiTest.click(tag: String, expectTag: String? = null, expect: (() -> Boolean)? = null) {
         onNodeWithTag(tag).performClick()
+        parkPointer()
         settle()
         val ok = (expectTag == null || onAllNodesWithTag(expectTag).fetchSemanticsNodes().isNotEmpty()) && (expect?.invoke() ?: true)
         if (!ok) {
@@ -65,7 +68,13 @@ class UiFlowTest {
     private fun DesktopComposeUiTest.selectModel(id: String) {
         onNodeWithTag("model-gallery").performScrollToNode(hasTestTag("model-card-$id"))
         onNodeWithTag("model-card-$id").performClick()
+        parkPointer()
         waitForIdle()
+    }
+
+    /** Moves the pointer to an empty part of the canvas, like a user would after clicking. */
+    private fun DesktopComposeUiTest.parkPointer() {
+        onAllNodes(isRoot()).onFirst().performMouseInput { moveTo(Offset(700f, 140f)) }
     }
 
     @Test

@@ -238,15 +238,15 @@ private fun TopBar(state: EditorState, actions: Actions, ui: UiState, modifier: 
                 }
             }
             Spacer(Modifier.weight(1f))
-            IconBtn(Icons.AutoMirrored.Outlined.Undo, "Undo", { state.undo() }, enabled = state.canUndo, tag = "undo")
-            IconBtn(Icons.AutoMirrored.Outlined.Redo, "Redo", { state.redo() }, enabled = state.canRedo, tag = "redo")
+            IconBtn(Icons.AutoMirrored.Outlined.Undo, "Undo", { state.undo() }, enabled = state.canUndo, tag = "undo", tipBelow = true)
+            IconBtn(Icons.AutoMirrored.Outlined.Redo, "Redo", { state.redo() }, enabled = state.canRedo, tag = "redo", tipBelow = true)
             VerticalDivider(Modifier.height(22.dp).padding(horizontal = 8.dp), color = Tok.C.line)
-            IconBtn(Icons.Outlined.Add, "New from template", { ui.templatesOpen = true }, tag = "new")
-            IconBtn(Icons.Outlined.FolderOpen, "Open…", { actions.guard { actions.open() } })
-            IconBtn(Icons.Outlined.Save, "Save", { actions.save() })
+            IconBtn(Icons.Outlined.Add, "New from template", { ui.templatesOpen = true }, tag = "new", tipBelow = true)
+            IconBtn(Icons.Outlined.FolderOpen, "Open…", { actions.guard { actions.open() } }, tipBelow = true)
+            IconBtn(Icons.Outlined.Save, "Save", { actions.save() }, tipBelow = true)
             var settingsMenu by remember { mutableStateOf(false) }
             Box {
-                IconBtn(Icons.Outlined.Settings, "Settings", { settingsMenu = true }, active = settingsMenu, tag = "settings")
+                IconBtn(Icons.Outlined.Settings, "Settings", { settingsMenu = true }, active = settingsMenu, tag = "settings", tipBelow = true)
                 GlassMenu(settingsMenu, { settingsMenu = false }) {
                     Text("Motion", style = Tok.T.caption, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
                     MotionPref.entries.forEach { p ->

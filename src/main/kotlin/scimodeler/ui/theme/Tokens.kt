@@ -45,7 +45,7 @@ object Tok {
         val glass = Color(0xB8FFFFFF)
         val glassStrong = Color(0xF2FFFFFF)
         val glassBorder = Color(0xCCFFFFFF)
-        val glassShadow = Color(0x330F172A)
+        val glassShadow = Color(0x260F172A)
 
         val surface = Color(0xE6FFFFFF)
         val surfaceSolid = Color.White

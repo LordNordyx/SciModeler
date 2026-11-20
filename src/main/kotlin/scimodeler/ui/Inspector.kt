@@ -148,14 +148,14 @@ private fun ContentPanel(state: EditorState, ui: UiState) {
             SectionHeader("Group names")
             spec.groups.forEachIndexed { gi, def ->
                 Field(
-                    "Group ${gi + 1}", doc.groupNames.getOrElse(gi) { "" },
+                    def, doc.groupNames.getOrElse(gi) { "" },
                     { v ->
                         state.update("group$gi") { d ->
                             val names = (0 until spec.groups.size).map { k -> if (k == gi) v else d.groupNames.getOrElse(k) { "" } }
                             d.copy(groupNames = names)
                         }
                     },
-                    placeholder = def,
+                    placeholder = "Caption for “$def”",
                 )
                 Spacer(Modifier.height(8.dp))
             }

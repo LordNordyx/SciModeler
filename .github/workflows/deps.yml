@@ -1,0 +1,23 @@
+name: Export dependencies
+on:
+  push:
+    branches: [ci-deps-request]
+permissions:
+  contents: write
+jobs:
+  deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew exportDeps --no-daemon
+      - name: Publish jars
+        run: |
+          cd build/deps && ls | head -100 && du -sh .
+          git init -q && git checkout -q -b ci-deps
+          git add -A && git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "deps"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" ci-deps

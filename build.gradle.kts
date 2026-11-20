@@ -67,3 +67,9 @@ compose.desktop {
         }
     }
 }
+
+// Copies all library jars to build/deps (used to compile/test outside Gradle).
+tasks.register<Copy>("exportDeps") {
+    from(configurations.named("testRuntimeClasspath"))
+    into(layout.buildDirectory.dir("deps"))
+}

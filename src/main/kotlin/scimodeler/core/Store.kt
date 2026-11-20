@@ -26,11 +26,18 @@ object AppDirs {
 }
 
 /** Writes via a temp file so a crash never leaves a half-written file. */
+@Synchronized
 fun File.writeAtomically(text: String) {
     parentFile?.mkdirs()
-    val tmp = File(parentFile, ".$name.tmp")
+    val tmp = File(parentFile, ".$name.${Thread.currentThread().id}.tmp")
     tmp.writeText(text, Charsets.UTF_8)
-    if (!tmp.renameTo(this)) { delete(); if (!tmp.renameTo(this)) { writeText(text, Charsets.UTF_8); tmp.delete() } }
+    try {
+        java.nio.file.Files.move(tmp.toPath(), toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+    } catch (e: Exception) {
+        // Some file systems (or a file briefly locked by antivirus on Windows) refuse an atomic move.
+        runCatching { java.nio.file.Files.move(tmp.toPath(), toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING) }
+            .onFailure { writeText(text, Charsets.UTF_8); tmp.delete() }
+    }
 }
 
 enum class MotionPref(val label: String) { SYSTEM("Follow system"), REDUCED("Reduced"), FULL("Full") }

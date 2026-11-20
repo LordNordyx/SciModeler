@@ -15,6 +15,7 @@ import scimodeler.core.DocIO
 import scimodeler.core.ExportSpec
 import scimodeler.core.Exporter
 import scimodeler.core.IconStore
+import scimodeler.core.PresetStore
 import scimodeler.core.Images
 import scimodeler.core.Renderer
 import scimodeler.core.Scene
@@ -38,6 +39,12 @@ class Actions(
         private set
     var recentImages by mutableStateOf(IconStore.recent())
         private set
+    var presets by mutableStateOf(PresetStore.list())
+        private set
+    /** Non-null while the "save to My models" dialog is open (holds the proposed name). */
+    var savePresetName by mutableStateOf<String?>(null)
+    /** Preset being renamed. */
+    var renamePreset by mutableStateOf<PresetStore.Preset?>(null)
 
     init {
         state.exportSpec = ExportSpec(settings.exportWidthCm, settings.exportDpi)
@@ -108,6 +115,61 @@ class Actions(
     }
 
     fun restoreDefaultIcon(itemId: Long) = state.updateItem(itemId) { it.copy(icon = null, image = null) }
+
+    // ---------------------------------------------------------------- Freeform elements
+
+    private fun pickImage(): String? {
+        val f = dialogs.pickImage() ?: return null
+        return runCatching { Images.import(f) }
+            .onSuccess { IconStore.remember(it); recentImages = IconStore.recent() }
+            .onFailure { toast("Could not use ${f.name}: ${it.message}") }
+            .getOrNull()
+    }
+
+    fun addImageElement(ui: scimodeler.ui.freeform.FreeformUi) {
+        val img = pickImage() ?: return
+        val (w, h) = Images.size(img)
+        val k = minOf(260f / w, 220f / h, 1.5f)
+        val ff = ui.ff
+        ui.addElement(scimodeler.core.FfElement(
+            kind = scimodeler.core.FfKind.IMAGE, x = ff.width / 2f - w * k / 2f, y = ff.height / 2f - h * k / 2f,
+            w = w * k, h = h * k, image = img, slot = scimodeler.core.Slots.NEUTRAL,
+        ))
+    }
+
+    fun chooseElementImage(ui: scimodeler.ui.freeform.FreeformUi, id: Long) {
+        val img = pickImage() ?: return
+        ui.edit { f -> scimodeler.core.FreeformOps.update(f, setOf(id)) { e ->
+            if (e.kind == scimodeler.core.FfKind.IMAGE) {
+                // Keep the element's width; height follows the image's proportions.
+                val (w, h) = Images.size(img); e.copy(image = img, h = e.w * h / w)
+            } else e.copy(image = img)
+        } }
+    }
+
+    fun chooseElementIconImage(ui: scimodeler.ui.freeform.FreeformUi, id: Long) {
+        val img = pickImage() ?: return
+        ui.edit { f -> scimodeler.core.FreeformOps.update(f, setOf(id)) { it.copy(image = img) } }
+    }
+
+    // ---------------------------------------------------------------- My models (presets)
+
+    fun requestSavePreset() { savePresetName = state.doc.title.ifBlank { "My model" } }
+
+    fun savePreset(name: String) {
+        runCatching { PresetStore.save(name, state.doc) }
+            .onSuccess { presets = PresetStore.list(); savePresetName = null; toast("Saved “${it.name}” to My models") }
+            .onFailure { toast("Could not save: ${it.message}") }
+    }
+
+    fun openPreset(p: PresetStore.Preset) = guard {
+        state.load(p.doc.copy(items = p.doc.items), null)
+        toast("Opened “${p.name}” — changes don't affect the saved model until you save it again")
+    }
+
+    fun duplicatePreset(p: PresetStore.Preset) { runCatching { PresetStore.duplicate(p) }; presets = PresetStore.list() }
+    fun deletePreset(p: PresetStore.Preset) { PresetStore.delete(p); presets = PresetStore.list(); toast("Deleted “${p.name}”") }
+    fun doRenamePreset(p: PresetStore.Preset, name: String) { runCatching { PresetStore.rename(p, name) }; presets = PresetStore.list(); renamePreset = null }
 
     // ---------------------------------------------------------------- Export
 

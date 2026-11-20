@@ -319,14 +319,14 @@ fun SectionHeader(text: String, modifier: Modifier = Modifier, trailing: @Compos
 }
 
 @Composable
-fun Swatch(color: Color, size: Dp = 22.dp, selected: Boolean = false, tip: String? = null, onClick: (() -> Unit)? = null) {
+fun Swatch(color: Color, size: Dp = 22.dp, selected: Boolean = false, tip: String? = null, tag: String? = null, onClick: (() -> Unit)? = null) {
     val src = remember { MutableInteractionSource() }
     val st = src.states()
     val scale by animateFloatAsState(if (st.hovered && onClick != null) 1.12f else 1f, LocalMotion.current.spring())
     val shape = RoundedCornerShape(50)
     val body = @Composable {
         Box(
-            Modifier.size(size).scale(scale).clip(shape).background(color)
+            Modifier.then(if (tag != null) Modifier.testTag(tag) else Modifier).size(size).scale(scale).clip(shape).background(color)
                 .border(if (selected) 2.5.dp else 1.dp, if (selected) Tok.C.text else Color.Black.copy(alpha = 0.08f), shape)
                 .focusRing(st.focused, shape)
                 .then(if (onClick != null) Modifier.pressable(src, onClick = onClick) else Modifier),

@@ -13,19 +13,25 @@ enum class Role(val label: String) {
     INPUT("Input"),
     OUTPUT("Output"),
     CONTEXT("Context"),
+    MEDIATOR("Mediator"),
+    MODERATOR("Moderator"),
 }
 
 data class Item(
     val id: Long = Ids.next(),
     val label: String,
     val bullets: List<String> = emptyList(),
-    /** ARGB colour override; null = take colour from the theme. */
+    /** Custom ARGB colour; overrides everything else. */
     val color: Int? = null,
+    /** Theme palette slot; the item follows theme changes. Null with no [color] = automatic. */
+    val slot: Int? = null,
     /** Built-in icon id ([IconLibrary]); null = the default icon for this position. */
     val icon: String? = null,
     /** Custom icon as base64-encoded PNG; overrides [icon]. */
     val image: String? = null,
     val role: Role = Role.AUTO,
+    /** Parent item for hierarchical models (tree); null = top level. */
+    val parent: Long? = null,
 )
 
 data class Style(
@@ -36,6 +42,8 @@ data class Style(
     val showCallouts: Boolean = true,
     val showLegend: Boolean = true,
     val showIcons: Boolean = true,
+    /** Labels on arrows, e.g. hypotheses H1, H2 … in path models. */
+    val showLabels: Boolean = true,
     val shadows: Boolean = true,
     val gradients: Boolean = true,
     /** Rotation in degrees for circular layouts. */
@@ -54,6 +62,8 @@ data class ModelDoc(
     /** Optional custom captions for item groups (see [ModelSpec.groups]). */
     val groupNames: List<String> = emptyList(),
     val style: Style = Style(),
+    /** Content of a freeform (custom-built) model. */
+    val freeform: Freeform? = null,
 ) {
     val spec: ModelSpec get() = Models.get(layout)
 

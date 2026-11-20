@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -94,13 +95,18 @@ import kotlin.math.max
 class UiState {
     var iconPickerFor by mutableStateOf<Long?>(null)
     var templatesOpen by mutableStateOf(false)
+    /** Set by the app: the freeform builder's own Esc handling (leave tool, clear selection). */
+    var freeform: scimodeler.ui.freeform.FreeformUi? = null
 
     /** Closes the top-most overlay; returns true if something was closed. */
     fun dismissTop(actions: Actions?): Boolean = when {
         actions?.pending != null -> { actions.pending = null; true }
+        actions?.savePresetName != null -> { actions.savePresetName = null; true }
+        actions?.renamePreset != null -> { actions.renamePreset = null; true }
         iconPickerFor != null -> { iconPickerFor = null; true }
+        freeform?.iconPickerFor != null -> { freeform?.iconPickerFor = null; true }
         templatesOpen -> { templatesOpen = false; true }
-        else -> false
+        else -> freeform?.escape() ?: false
     }
 }
 
@@ -122,6 +128,8 @@ fun AppRoot(state: EditorState, dialogs: Dialogs, ui: UiState, onReady: (Actions
     }
     val haze = remember { HazeState() }
     val canvas = remember { CanvasState() }
+    val ffui = remember(state) { scimodeler.ui.freeform.FreeformUi(state) }
+    ui.freeform = ffui
 
     // Autosave the session so the document (including custom icons) survives a restart.
     LaunchedEffect(state.doc, state.file, state.dirty) {
@@ -137,19 +145,29 @@ fun AppRoot(state: EditorState, dialogs: Dialogs, ui: UiState, onReady: (Actions
                 CanvasView(
                     state, canvas,
                     if (solid) Modifier.fillMaxSize() else Modifier.fillMaxSize().hazeSource(haze),
-                    padStart = g + Tok.Layout.gallery, padEnd = g + Tok.Layout.inspector, padTop = panelTop,
+                    padStart = g + Tok.Layout.gallery, padEnd = g + Tok.Layout.inspector,
+                    padTop = panelTop + (if (state.doc.spec.freeform) 56.dp else 0.dp), ffui = ffui,
                 )
                 TopBar(state, actions, ui, Modifier.align(Alignment.TopCenter).padding(g).fillMaxWidth().height(Tok.Layout.topBar))
                 ModelGallery(
                     state,
                     Modifier.align(Alignment.TopStart).padding(start = g, top = panelTop, bottom = g)
                         .width(Tok.Layout.gallery).fillMaxHeight(),
+                    actions, ffui,
                 )
                 Inspector(
                     state, actions, ui,
                     Modifier.align(Alignment.TopEnd).padding(end = g, top = panelTop, bottom = g)
                         .width(Tok.Layout.inspector).fillMaxHeight(),
+                    ffui,
                 )
+                AnimatedVisibility(
+                    state.doc.spec.freeform, enter = LocalMotion.current.popIn(), exit = LocalMotion.current.popOut(),
+                    modifier = Modifier.align(Alignment.TopCenter)
+                        .padding(start = g + Tok.Layout.gallery + g, end = g + Tok.Layout.inspector + g, top = panelTop),
+                ) {
+                    scimodeler.ui.freeform.TransformBar(ffui, Modifier)
+                }
                 ZoomBar(
                     canvas,
                     Modifier.align(Alignment.BottomCenter)
@@ -181,6 +199,44 @@ fun AppRoot(state: EditorState, dialogs: Dialogs, ui: UiState, onReady: (Actions
                             onClose = { ui.iconPickerFor = null },
                         )
                     }
+                }
+                val ffPick = ffui.iconPickerFor
+                Overlay(ffPick != null, onDismiss = { ffui.iconPickerFor = null }) {
+                    val el = ffui.ff.byId(ffPick)
+                    if (ffPick != null && el != null) {
+                        scimodeler.ui.components.ElementIconPicker(
+                            doc = state.doc, element = el, recentImages = actions.recentImages,
+                            onPickIcon = { id -> ffui.edit { f -> scimodeler.core.FreeformOps.update(f, setOf(ffPick)) { it.copy(icon = id, image = null) } } },
+                            onChooseImage = { actions.chooseElementIconImage(ffui, ffPick) },
+                            onPickImage = { b64 -> ffui.edit { f -> scimodeler.core.FreeformOps.update(f, setOf(ffPick)) { it.copy(image = b64) } } },
+                            onRestoreDefault = { ffui.edit { f -> scimodeler.core.FreeformOps.update(f, setOf(ffPick)) { it.copy(icon = null, image = null) } } },
+                            onClose = { ffui.iconPickerFor = null },
+                        )
+                    }
+                }
+                val saveName = actions.savePresetName
+                Overlay(saveName != null, onDismiss = { actions.savePresetName = null }) {
+                    NameDialog(
+                        title = "Save to My models", hint = "The model will appear in the model library, ready to reuse.",
+                        initial = saveName ?: "", confirm = "Save", tag = "save-preset-dialog",
+                        onConfirm = { actions.savePreset(it) }, onCancel = { actions.savePresetName = null },
+                    )
+                }
+                val renaming = actions.renamePreset
+                Overlay(renaming != null, onDismiss = { actions.renamePreset = null }) {
+                    if (renaming != null) NameDialog(
+                        title = "Rename model", hint = null, initial = renaming.name, confirm = "Rename", tag = "rename-preset-dialog",
+                        onConfirm = { actions.doRenamePreset(renaming, it) }, onCancel = { actions.renamePreset = null },
+                    )
+                }
+                // Ghost that follows a component being dragged from the library
+                ffui.dragComponent?.let { comp ->
+                    val dens = androidx.compose.ui.platform.LocalDensity.current.density
+                    Box(
+                        Modifier.offset(x = (ffui.dragPos.x / dens).dp - 60.dp, y = (ffui.dragPos.y / dens).dp - 24.dp)
+                            .glass(RoundedCornerShape(Tok.R.lg), Tok.C.glassStrong, elevation = 16.dp)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                    ) { Text("+ ${comp.name}", style = Tok.T.label) }
                 }
                 val next = actions.pending
                 Overlay(next != null, onDismiss = { actions.pending = null }) {
@@ -344,6 +400,27 @@ private fun TemplateGallery(onPick: (scimodeler.core.Template) -> Unit, onClose:
                     onClick = { onPick(t) }, tag = "template-${t.name.lowercase().replace(' ', '-')}",
                 )
             }
+        }
+    }
+}
+
+
+@Composable
+private fun NameDialog(title: String, hint: String?, initial: String, confirm: String, tag: String, onConfirm: (String) -> Unit, onCancel: () -> Unit) {
+    var name by remember(initial) { mutableStateOf(initial) }
+    Column(Modifier.width(440.dp).padding(24.dp).testTag(tag)) {
+        Text(title, style = Tok.T.display)
+        if (hint != null) {
+            Spacer(Modifier.height(6.dp))
+            Text(hint, style = Tok.T.small)
+        }
+        Spacer(Modifier.height(16.dp))
+        scimodeler.ui.components.Field("Name", name, { name = it }, tag = "$tag-name")
+        Spacer(Modifier.height(18.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.weight(1f))
+            AppButton("Cancel", onCancel)
+            AppButton(confirm, { if (name.isNotBlank()) onConfirm(name.trim()) }, kind = ButtonKind.PRIMARY, enabled = name.isNotBlank(), tag = "$tag-confirm")
         }
     }
 }

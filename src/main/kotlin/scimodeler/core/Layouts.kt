@@ -34,7 +34,7 @@ fun Ctx.wheel(): Size {
     val diagram = capture {
         val ringPath = PathData.circle(cx, cy, ring)
         shadow(ringPath)
-        shape(ringPath, Paint.Solid(Ink.ring))
+        shape(ringPath, Paint.Solid(theme.ring))
         for (i in 0 until n) {
             val a0 = start + i * sweep
             val a1 = a0 + sweep

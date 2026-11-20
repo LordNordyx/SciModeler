@@ -24,6 +24,9 @@ object Images {
         ImageIO.read(ByteArrayInputStream(Base64.getDecoder().decode(base64)))
     }.getOrNull()?.also { cache[base64] = it }
 
+    /** Pixel size of an encoded image (1×1 if it can't be decoded). */
+    fun size(base64: String): Pair<Float, Float> = decode(base64)?.let { it.width.toFloat() to it.height.toFloat() } ?: (1f to 1f)
+
     /** Size of the largest box with the image's aspect ratio that fits in [side]×[side]. */
     fun fit(base64: String, side: Float): Pair<Float, Float> {
         val img = decode(base64) ?: return side to side

@@ -95,7 +95,7 @@ enum class Align { START, CENTER, END }
 
 sealed interface Prim {
     /** A raster image (base64 PNG) drawn into the box (x, y, w, h). The box already has the image's aspect ratio. */
-    data class Image(val base64: String, val x: Float, val y: Float, val w: Float, val h: Float) : Prim
+    data class Image(val base64: String, val x: Float, val y: Float, val w: Float, val h: Float, val rotation: Float = 0f) : Prim
 
     data class Shape(
         val path: PathData,
@@ -141,7 +141,11 @@ fun Prim.translated(dx: Float, dy: Float): Prim = when (this) {
     is Prim.Image -> copy(x = x + dx, y = y + dy)
 }
 
-class Scene(val width: Float, val height: Float, val background: Int?, val prims: List<Prim>, val fontFamily: String)
+class Scene(
+    val width: Float, val height: Float, val background: Int?, val prims: List<Prim>, val fontFamily: String,
+    /** Where the model body (e.g. a freeform artboard) starts inside the scene. */
+    val bodyX: Float = 0f, val bodyY: Float = 0f,
+)
 
 fun rad(deg: Float): Double = deg * PI / 180.0
 fun px(cx: Float, radius: Float, deg: Float) = cx + radius * cos(rad(deg)).toFloat()

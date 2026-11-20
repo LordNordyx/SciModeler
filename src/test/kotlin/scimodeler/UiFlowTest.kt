@@ -94,7 +94,7 @@ class UiFlowTest {
         System.setProperty("scimodeler.home", home.absolutePath)
         // CI machines without a GPU render blur in software, which is very slow on Windows runners;
         // use solid panels there (macOS runs keep testing the glass effect).
-        val windows = System.getProperty("os.name").lowercase().contains("win")
+        val windows = System.getProperty("os.name").lowercase().contains("win") || System.getProperty("scimodeler.fast") != null
         if (windows) {
             SettingsStore.save(SettingsStore.load().copy(glass = GlassPref.SOLID, motion = MotionPref.REDUCED))
         }

@@ -289,3 +289,20 @@ object IconRaster {
         return Renderer.image(Scene(100f, 100f, null, prims, d.style.fontFamily), px / 100f)
     }
 }
+
+/** Renders a single freeform element (used for component tiles and previews). */
+object ElementRaster {
+    fun render(doc: ModelDoc, e: FfElement, maxPx: Int, pad: Float = 14f): java.awt.image.BufferedImage {
+        val b = if (e.isConnector) Freeform().bounds(e) else floatArrayOf(e.x, e.y, e.w, e.h + if (e.kind == FfKind.NODE && e.text.isNotBlank()) 40f else 0f)
+        val w = maxOf(b[2], 20f) + pad * 2; val h = maxOf(b[3], 20f) + pad * 2
+        val dx = pad - b[0]; val dy = pad - b[1]
+        val moved = e.copy(x = e.x + dx, y = e.y + dy, x2 = e.x2 + dx, y2 = e.y2 + dy, from = null, to = null, hidden = false)
+        val d = doc.copy(
+            layout = "freeform", freeform = Freeform(w, h, listOf(moved)), title = "", legend = "",
+            style = doc.style.copy(showTitle = false, showLegend = false, transparentBackground = true),
+        )
+        val ctx = Ctx(d, AwtMeasure.of(d.style.fontFamily))
+        val prims = ctx.capture { ctx.freeformLayout() }
+        return Renderer.image(Scene(w, h, null, prims, d.style.fontFamily), maxPx / maxOf(w, h))
+    }
+}

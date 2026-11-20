@@ -30,6 +30,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.automirrored.outlined.FormatIndentDecrease
+import androidx.compose.material.icons.automirrored.outlined.FormatIndentIncrease
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
@@ -65,6 +67,8 @@ import scimodeler.core.Role
 import scimodeler.core.Themes
 import scimodeler.core.hex
 import scimodeler.core.lighten
+import scimodeler.core.applyTheme
+import scimodeler.core.colorOf
 import scimodeler.ui.components.AppButton
 import scimodeler.ui.components.ButtonKind
 import scimodeler.ui.components.Field
@@ -87,7 +91,7 @@ import kotlin.math.roundToInt
 private enum class Tab(val title: String) { CONTENT("Content"), STYLE("Style"), EXPORT("Export") }
 
 @Composable
-fun Inspector(state: EditorState, actions: Actions, ui: UiState, modifier: Modifier) {
+fun Inspector(state: EditorState, actions: Actions, ui: UiState, modifier: Modifier, ffui: scimodeler.ui.freeform.FreeformUi) {
     val motion = LocalMotion.current
     var tab by remember { mutableStateOf(Tab.CONTENT) }
     GlassPanel(modifier) {
@@ -110,7 +114,7 @@ fun Inspector(state: EditorState, actions: Actions, ui: UiState, modifier: Modif
                 label = "inspector-tab",
             ) { t ->
                 when (t) {
-                    Tab.CONTENT -> ContentPanel(state, ui)
+                    Tab.CONTENT -> if (state.doc.spec.freeform) scimodeler.ui.freeform.FreeformInspector(state, ffui, actions) else ContentPanel(state, ui)
                     Tab.STYLE -> StylePanel(state)
                     Tab.EXPORT -> ExportPanel(state, actions)
                 }
@@ -176,7 +180,7 @@ private fun ContentPanel(state: EditorState, ui: UiState) {
             Box(
                 if (motion.enabled) Modifier.animateItem() else Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null),
             ) {
-                ItemCard(state, ui, item, index, doc.items.size, item.color ?: theme.colors[index % theme.colors.size], theme.colors, spec.usesRoles, spec.usesIcons)
+                ItemCard(state, ui, item, index, doc.items.size, doc.colorOf(index), theme.colors, spec, depthOf(doc, index))
             }
         }
         item(key = "footnote") {
@@ -189,19 +193,43 @@ private fun ContentPanel(state: EditorState, ui: UiState) {
     }
 }
 
+/** Nesting depth of an item in hierarchical models. */
+private fun depthOf(doc: scimodeler.core.ModelDoc, index: Int): Int {
+    if (!doc.spec.hierarchical) return 0
+    val byId = doc.items.associateBy { it.id }
+    var cur = doc.items[index]; var d = 0
+    while (cur.parent != null && byId[cur.parent] != null && d < 12) { cur = byId.getValue(cur.parent!!); d++ }
+    return d
+}
+
+/** Makes item [index] a child of the previous item at the same level (tree models). */
+private fun EditorState.indent(index: Int) = update { d ->
+    val depth = depthOf(d, index)
+    val prev = (index - 1 downTo 0).firstOrNull { depthOf(d, it) == depth } ?: return@update d
+    d.copy(items = d.items.mapIndexed { i, it -> if (i == index) it.copy(parent = d.items[prev].id) else it })
+}
+
+private fun EditorState.outdent(index: Int) = update { d ->
+    val item = d.items[index]
+    val parent = d.items.firstOrNull { it.id == item.parent } ?: return@update d
+    d.copy(items = d.items.mapIndexed { i, it -> if (i == index) it.copy(parent = parent.parent) else it })
+}
+
 @Composable
 private fun ItemCard(
     state: EditorState, ui: UiState, item: Item, index: Int, count: Int, color: Int, themeColors: List<Int>,
-    roles: Boolean, iconsShown: Boolean,
+    spec: scimodeler.core.ModelSpec, depth: Int,
 ) {
     var pickColor by remember { mutableStateOf(false) }
     val src = remember { MutableInteractionSource() }
     val st = src.states()
     val motion = LocalMotion.current
     val tileBg by animateColorAsState(if (st.hovered) Color(lighten(color, 0.78f)) else Color(lighten(color, 0.86f)), motion.tween(Tok.Motion.fast))
+    val shown by animateColorAsState(Color(color), motion.tween(Tok.Motion.base))
     val tileShape = RoundedCornerShape(Tok.R.lg)
+    val iconsShown = spec.usesIcons
     Column(
-        Modifier.padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(Tok.R.xl)).background(Tok.C.surface)
+        Modifier.padding(start = (depth * 18).dp, bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(Tok.R.xl)).background(Tok.C.surface)
             .border(1.dp, Tok.C.line, RoundedCornerShape(Tok.R.xl)).padding(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -223,41 +251,65 @@ private fun ItemCard(
         }
         Spacer(Modifier.height(8.dp))
         Field(
-            "Description points", item.bullets.joinToString("\n"),
+            if (spec.hierarchical) "Examples (shown under the lowest level)" else "Description points", item.bullets.joinToString("\n"),
             { v -> state.updateItem(item.id, "bullets") { it.copy(bullets = v.split('\n')) } },
             singleLine = false, minLines = 2, placeholder = "One point per line",
         )
-        if (roles) {
+        if (spec.usesRoles) {
             Spacer(Modifier.height(8.dp))
-            Segmented(Role.entries.toList(), item.role, { it.label }, { r -> state.updateItem(item.id) { it.copy(role = r) } })
+            val options = listOf(Role.AUTO) + spec.roles.map { it.first }
+            Segmented(options, item.role, { if (it == Role.AUTO) "Auto" else spec.roleLabel(it) }, { r -> state.updateItem(item.id) { it.copy(role = r) } },
+                tagPrefix = "role-$index")
         }
         Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box {
-                Swatch(Color(color), 22.dp, tip = "Item colour") { pickColor = true }
+                // The swatch shows exactly the colour the model uses for this item.
+                Swatch(shown, 22.dp, tip = colorDescription(item), tag = "item-color-$index") { pickColor = true }
                 GlassMenu(pickColor, { pickColor = false }) {
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
-                        Text("Theme", style = Tok.T.caption)
+                        Text("Theme · follows theme changes", style = Tok.T.caption)
                         Spacer(Modifier.height(6.dp))
-                        ColorGrid(themeColors, item.color) { c -> state.updateItem(item.id) { it.copy(color = c) }; pickColor = false }
+                        SlotGrid(themeColors, item.slot.takeIf { item.color == null }) { k -> state.updateItem(item.id) { it.copy(slot = k, color = null) }; pickColor = false }
                         Spacer(Modifier.height(10.dp))
-                        Text("More", style = Tok.T.caption)
+                        Text("Custom", style = Tok.T.caption)
                         Spacer(Modifier.height(6.dp))
-                        ColorGrid(extraColors, item.color) { c -> state.updateItem(item.id) { it.copy(color = c) }; pickColor = false }
+                        ColorGrid(extraColors, item.color) { c -> state.updateItem(item.id) { it.copy(color = c, slot = null) }; pickColor = false }
                     }
-                    DropdownMenuItem(text = { Text("Use theme colour automatically", style = Tok.T.body) }, onClick = {
-                        state.updateItem(item.id) { it.copy(color = null) }; pickColor = false
-                    })
+                    DropdownMenuItem(text = { Text("Automatic", style = Tok.T.body) }, onClick = {
+                        state.updateItem(item.id) { it.copy(color = null, slot = null) }; pickColor = false
+                    }, modifier = Modifier.testTag("item-color-auto-$index"))
                 }
             }
+            Spacer(Modifier.width(8.dp))
+            Text(colorDescription(item), style = Tok.T.tiny.copy(color = Tok.C.text3))
             Spacer(Modifier.weight(1f))
+            if (spec.hierarchical) {
+                IconBtn(Icons.AutoMirrored.Outlined.FormatIndentDecrease, "Move up a level", { state.outdent(index) }, enabled = item.parent != null, size = 30.dp, iconSize = 17.dp, tag = "outdent-$index")
+                IconBtn(Icons.AutoMirrored.Outlined.FormatIndentIncrease, "Nest under the item above", { state.indent(index) }, enabled = index > 0, size = 30.dp, iconSize = 17.dp, tag = "indent-$index")
+            }
             IconBtn(Icons.Outlined.KeyboardArrowUp, "Move up", { state.moveItem(index, -1) }, enabled = index > 0, size = 30.dp, iconSize = 17.dp)
             IconBtn(Icons.Outlined.KeyboardArrowDown, "Move down", { state.moveItem(index, 1) }, enabled = index < count - 1, size = 30.dp, iconSize = 17.dp)
             IconBtn(Icons.Outlined.ContentCopy, "Duplicate", {
                 state.update { d -> d.copy(items = d.items.toMutableList().also { it.add(index + 1, item.copy(id = Ids.next())) }) }
             }, size = 30.dp, iconSize = 16.dp)
-            IconBtn(Icons.Outlined.Delete, "Delete", { state.update { d -> d.copy(items = d.items.filterNot { it.id == item.id }) } }, size = 30.dp, iconSize = 17.dp)
+            IconBtn(Icons.Outlined.Delete, "Delete", {
+                state.update { d -> d.copy(items = d.items.filterNot { it.id == item.id }.map { if (it.parent == item.id) it.copy(parent = item.parent) else it }) }
+            }, size = 30.dp, iconSize = 17.dp)
         }
+    }
+}
+
+private fun colorDescription(item: Item): String = when {
+    item.color != null -> "Custom colour"
+    item.slot != null -> "Theme colour ${item.slot + 1}"
+    else -> "Automatic"
+}
+
+@Composable
+private fun SlotGrid(colors: List<Int>, selected: Int?, onPick: (Int) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        colors.forEachIndexed { k, c -> Swatch(Color(c), 24.dp, selected = k == selected, tag = "slot-$k") { onPick(k) } }
     }
 }
 
@@ -287,6 +339,7 @@ private fun StylePanel(state: EditorState) {
     val motion = LocalMotion.current
     Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
         SectionHeader("Colour theme")
+        Text("A theme restyles the whole model: colours, gradients, shadows and backgrounds. Undo to go back.", style = Tok.T.small, modifier = Modifier.padding(bottom = 10.dp))
         Themes.all.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
                 row.forEach { t ->
@@ -300,10 +353,13 @@ private fun StylePanel(state: EditorState) {
                         Modifier.weight(1f).scale(if (st.pressed) 0.97f else 1f).clip(shape).background(bg)
                             .border(if (sel) 2.dp else 1.dp, bd, shape).focusRing(st.focused, shape)
                             .testTag("theme-${t.id}")
-                            .pressable(src, role = SemRole.RadioButton) { state.updateStyle { it.copy(theme = t.id) } }
+                            .pressable(src, role = SemRole.RadioButton) { state.update { it.applyTheme(t.id) } }
                             .padding(10.dp),
                     ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) { t.colors.take(6).forEach { Swatch(Color(it), 15.dp) } }
+                        Row(
+                            Modifier.clip(RoundedCornerShape(6.dp)).background(Color(t.background)).padding(3.dp),
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        ) { t.colors.take(6).forEach { Swatch(Color(it), 15.dp) } }
                         Spacer(Modifier.height(6.dp))
                         Text(t.name, style = Tok.T.label.copy(fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Medium))
                     }
@@ -340,6 +396,9 @@ private fun StylePanel(state: EditorState) {
         SectionHeader("Show")
         ToggleRow("Title & subtitle", style.showTitle, { v -> state.updateStyle { it.copy(showTitle = v) } })
         ToggleRow("Descriptions", style.showCallouts, { v -> state.updateStyle { it.copy(showCallouts = v) } }, hint = "Each item's description points")
+        if (state.doc.spec.id == "path" || state.doc.spec.id == "mediation") {
+            ToggleRow("Path labels", style.showLabels, { v -> state.updateStyle { it.copy(showLabels = v) } }, hint = "H1, H2 … or a, b, c′ on the arrows")
+        }
         ToggleRow("Icons", style.showIcons, { v -> state.updateStyle { it.copy(showIcons = v) } }, hint = "In layouts that support icons", tag = "toggle-icons")
         ToggleRow("Footnote", style.showLegend, { v -> state.updateStyle { it.copy(showLegend = v) } })
 

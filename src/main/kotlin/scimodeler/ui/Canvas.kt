@@ -67,7 +67,7 @@ class CanvasState {
 private class Rendered(val layout: String, val bitmap: ImageBitmap)
 
 @Composable
-fun CanvasView(state: EditorState, cs: CanvasState, modifier: Modifier, padStart: Dp, padEnd: Dp, padTop: Dp) {
+fun CanvasView(state: EditorState, cs: CanvasState, modifier: Modifier, padStart: Dp, padEnd: Dp, padTop: Dp, ffui: scimodeler.ui.freeform.FreeformUi? = null) {
     val doc = state.doc
     val motion = LocalMotion.current
     val scene by produceState<Scene?>(null, doc) { value = withContext(Dispatchers.Default) { Renderer.scene(doc) } }
@@ -114,6 +114,9 @@ fun CanvasView(state: EditorState, cs: CanvasState, modifier: Modifier, padStart
                 ) {
                     rendered?.let {
                         Image(it.bitmap, "Model preview", Modifier.fillMaxSize().testTag("preview-image"), contentScale = ContentScale.FillBounds)
+                    }
+                    if (ffui != null && doc.spec.freeform) {
+                        scimodeler.ui.freeform.FreeformOverlay(ffui, sc, z, Modifier.fillMaxSize())
                     }
                 }
             }

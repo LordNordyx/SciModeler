@@ -12,7 +12,7 @@ class Ctx(val doc: ModelDoc, val m: Measure) {
     val icons: Boolean get() = style.showIcons && spec.usesIcons
     var prims = ArrayList<Prim>()
 
-    fun color(i: Int): Int = items[i].color ?: theme.colors[i % theme.colors.size]
+    fun color(i: Int): Int = doc.colorOf(i)
 
     fun add(p: Prim) { prims += p }
 
@@ -61,9 +61,14 @@ class Ctx(val doc: ModelDoc, val m: Measure) {
     fun iconDef(i: Int): IconDef = IconLibrary.get(items[i].icon) ?: IconLibrary.defaultFor(i)
 
     /** Draws a built-in icon centred at (cx, cy), [size] wide. */
-    fun glyph(def: IconDef, cx: Float, cy: Float, size: Float, color: Int, weight: Float = 2f) {
+    fun glyph(def: IconDef, cx: Float, cy: Float, size: Float, color: Int, weight: Float = 2f, rotation: Float = 0f) {
         val k = size / 24f
-        val f: (Float, Float) -> Pair<Float, Float> = { x, y -> (cx + (x - 12f) * k) to (cy + (y - 12f) * k) }
+        val ang = Math.toRadians(rotation.toDouble())
+        val co = kotlin.math.cos(ang).toFloat(); val si = kotlin.math.sin(ang).toFloat()
+        val f: (Float, Float) -> Pair<Float, Float> = { x, y ->
+            val dx = (x - 12f) * k; val dy = (y - 12f) * k
+            (cx + dx * co - dy * si) to (cy + dx * si + dy * co)
+        }
         def.pen.strokes.forEach { add(Prim.Shape(it.transformed(f), stroke = color, strokeWidth = weight * k)) }
         def.pen.fills.forEach { add(Prim.Shape(it.transformed(f), fill = Paint.Solid(color))) }
     }
@@ -193,7 +198,7 @@ class Ctx(val doc: ModelDoc, val m: Measure) {
         val c = color(i)
         val card = PathData.roundRect(x, y, w, h, 16f)
         shadow(card, 0.6f)
-        shape(card, Paint.Solid(lighten(c, 0.87f)))
+        shape(card, Paint.Solid(lighten(c, theme.cardTint)))
         val bar = when (accentSide) {
             -1 -> PathData.roundRect(x, y, 6f, h, 3f)
             1 -> PathData.roundRect(x + w - 6f, y, 6f, h, 3f)

@@ -15,7 +15,7 @@ import kotlin.math.sqrt
  * models placed side by side read as one family.
  */
 
-private val connector = hex("#D3D9E2")
+private val Ctx.connector: Int get() = theme.connector
 
 private fun Ctx.lineShape(x1: Float, y1: Float, x2: Float, y2: Float, c: Int = connector, w: Float = 5f) =
     shape(PathData.line(x1, y1, x2, y2), null, c, w)
@@ -59,7 +59,7 @@ fun Ctx.branches(): Size {
     val ring = PathData.circle(cx, cy, coreR)
     shadow(ring)
     shape(ring, Paint.Solid(Ink.white), connector, 12f)
-    shape(PathData.circle(cx, cy, coreR - 20f), Paint.Solid(Ink.panel))
+    shape(PathData.circle(cx, cy, coreR - 20f), Paint.Solid(theme.panel))
     centerText(cx, cy, (coreR - 20f) * 1.6f, (coreR - 20f) * 1.3f, theme.hub, 30f)
 
     for (i in 0 until n) {
@@ -129,7 +129,7 @@ fun Ctx.cone(): Size {
             val th = textBlock(i, 0f, 0f, tw, false)
             val bh = max(th + 32f, 70f)
             val x0 = if (side == -1) -e + inner - boxW else e - inner
-            shape(PathData.roundRect(x0, yc - bh / 2f, boxW, bh, 18f), Paint.Solid(Ink.panel))
+            shape(PathData.roundRect(x0, yc - bh / 2f, boxW, bh, 18f), Paint.Solid(theme.panel))
             val tx = if (side == -1) x0 + 22f else x0 + inner + 22f
             textBlock(i, tx, yc - th / 2f, tw, true, align = if (side == -1) Align.START else Align.END)
         }
@@ -276,8 +276,8 @@ fun Ctx.zigzag(): Size {
         val ty = y - th / 2f
         val r0 = min(ty - 12f, y - sq / 2f + 6f); val r1 = max(ty + th + 12f, y + sq / 2f - 6f)
         val lx0 = if (side == 1) sx + sq / 2f + 14f else tx; val lx1 = if (side == 1) tx + textW else sx - sq / 2f - 14f
-        lineShape(lx0, r0, lx1, r0, Ink.ring, 2f)
-        lineShape(lx0, r1, lx1, r1, Ink.ring, 2f)
+        lineShape(lx0, r0, lx1, r0, theme.ring, 2f)
+        lineShape(lx0, r1, lx1, r1, theme.ring, 2f)
         textBlock(i, tx, ty, textW, true, align = if (side == 1) Align.START else Align.END)
     }
     return Size(2 * half, endY + 6f)
@@ -395,7 +395,7 @@ fun Ctx.cardFlow(): Size {
         val x = i * (cardW + gapX)
         val card = PathData.roundRect(x, 0f, cardW, cardH, 22f)
         shadow(card)
-        shape(card, Paint.Solid(Ink.white), Ink.ring, 1.5f)
+        shape(card, Paint.Solid(Ink.white), theme.ring, 1.5f)
         shape(PathData.roundRect(x + 16f, 0f, cardW - 32f, 7f, 3.5f), Paint.Solid(c))
         val hy = 7f + pad + headH / 2f
         if (icons) {
@@ -405,7 +405,7 @@ fun Ctx.cardFlow(): Size {
         val lx = x + pad + 58f
         val f = fit(m, items[i].label, cardW - pad - 58f - pad, headH, 21f * s, 11f, bold = true)
         add(Prim.Text(f.lines, lx, hy, f.size, Ink.text, bold = true, align = Align.START))
-        if (bodyH > 0f) bullets(items[i].bullets, x + pad, 7f + pad + headH + 16f, bodyW, Ink.subtle, c, Ink.ring, true)
+        if (bodyH > 0f) bullets(items[i].bullets, x + pad, 7f + pad + headH + 16f, bodyW, Ink.subtle, c, theme.ring, true)
         if (i < items.lastIndex) {
             val ax = x + cardW + 10f
             arrow(listOf(ax to cardH / 2f, (ax + gapX - 20f) to cardH / 2f), lighten(color(i + 1), 0.25f), 8f, 26f)
@@ -428,18 +428,14 @@ fun Ctx.cardFlow(): Size {
 
 // ---------------------------------------------------------------- Group resolution for role-based models
 
-/** Splits items into (inputs, outputs, context) by role; AUTO items are split half/half. */
+/** Splits the visible items into (inputs, outputs, context) by their resolved role. */
 fun Ctx.groupsByRole(): Triple<List<Int>, List<Int>, List<Int>> {
-    val idx = items.indices.toList()
-    val explicit = items.any { it.role != Role.AUTO }
+    val roles = doc.resolvedRoles()
     val inputs = ArrayList<Int>(); val outputs = ArrayList<Int>(); val ctx = ArrayList<Int>()
-    if (!explicit) {
-        val k = ceil(idx.size / 2.0).toInt()
-        inputs += idx.take(k); outputs += idx.drop(k)
-    } else idx.forEach {
-        when (items[it].role) {
-            Role.OUTPUT -> outputs += it
-            Role.CONTEXT -> ctx += it
+    items.indices.forEach {
+        when (roles[it]) {
+            Role.OUTPUT, Role.MEDIATOR -> outputs += it
+            Role.CONTEXT, Role.MODERATOR -> ctx += it
             else -> inputs += it
         }
     }
@@ -529,7 +525,6 @@ fun Ctx.framework(): Size {
     val bodyH = maxOf(leftH, rightH, 2 * R + 40f)
     val W = boxW * 2 + gap * 2 + R * 2
     val cx = W / 2f; val cy = topBand + bodyH / 2f
-    val inC = theme.colors[0]; val outC = theme.hub; val ctxC = theme.colors[1 % theme.colors.size]
 
     fun drawBox(i: Int, x: Float, y: Float, w: Float, h: Float, c: Int) {
         val box = PathData.roundRect(x, y, w, h, 14f)
@@ -552,7 +547,7 @@ fun Ctx.framework(): Size {
     var y = topBand + (bodyH - leftH) / 2f
     for (i in ins) {
         val h = boxH(i, boxW)
-        val c = items[i].color ?: inC
+        val c = color(i)
         val by = y + h / 2f
         val mid = (boxW + 46f) to by
         arrow(listOf((boxW + 2f) to by, mid, edge(mid.first, mid.second, 10f)), lighten(c, 0.05f), 9f, 28f)
@@ -563,7 +558,7 @@ fun Ctx.framework(): Size {
     y = topBand + (bodyH - rightH) / 2f
     for (o in outs) {
         val h = boxH(o, boxW)
-        val c = items[o].color ?: outC
+        val c = color(o)
         val by = y + h / 2f
         val bx = W - boxW
         val mid = (bx - 46f) to by
@@ -577,7 +572,7 @@ fun Ctx.framework(): Size {
         val total = list.size * ctxW + (list.size - 1) * 24f
         var x = cx - total / 2f
         for (k in list) {
-            val c = items[k].color ?: ctxC
+            val c = color(k)
             val by = if (top) 0f else topBand + bodyH + 70f
             val ax = x + ctxW / 2f
             val start = if (top) ax to (by + ctxRowH + 2f) else ax to (by - 2f)

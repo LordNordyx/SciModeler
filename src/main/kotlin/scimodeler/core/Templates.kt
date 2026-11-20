@@ -173,6 +173,58 @@ object Templates {
                 ),
             )
         },
+        Template("Types of variables", "Hierarchy of categories with examples") {
+            val num = Item(label = "Numerical (quantitative)")
+            val fac = Item(label = "Categorical (qualitative)")
+            ModelDoc(
+                title = "Types of variables", center = "Type of variable", layout = "tree",
+                items = listOf(
+                    num,
+                    Item(label = "Continuous", bullets = listOf("e.g. concentration (mol/L)"), parent = num.id),
+                    Item(label = "Discrete", bullets = listOf("e.g. bacterial counts"), parent = num.id),
+                    fac,
+                    Item(label = "Ordinal", bullets = listOf("e.g. pain scale 0–10"), parent = fac.id),
+                    Item(label = "Nominal", bullets = listOf("e.g. drug A or B"), parent = fac.id),
+                ),
+            )
+        },
+        Template("Topic map", "Main topics with sub-topic lists") {
+            ModelDoc(
+                title = "Thesis structure", center = "Pharmaceutical care", layout = "topics",
+                items = listOf(
+                    i("Background", "book", "Definitions", "Legislation", "Previous studies"),
+                    i("Methods", "flask", "Design", "Sample", "Instruments", "Analysis"),
+                    i("Results", "chart", "Survey", "Interviews"),
+                    i("Discussion", "chat", "Interpretation", "Limitations", "Implications"),
+                ),
+            )
+        },
+        Template("Mediation model", "Independent → dependent with mediator and moderator") {
+            ModelDoc(
+                title = "Mediation and moderation", layout = "mediation",
+                items = listOf(
+                    i("Independent variable", role = Role.INPUT),
+                    i("Dependent variable", role = Role.OUTPUT),
+                    i("Mediator", role = Role.MEDIATOR),
+                    i("Moderator", role = Role.MODERATOR),
+                ),
+            )
+        },
+        Template("Hypothesis path model", "Hypothesised paths H1–H6") {
+            ModelDoc(
+                title = "Research model and hypotheses", layout = "path",
+                items = listOf(
+                    i("Social media use", "chat", role = Role.INPUT),
+                    i("Academic performance", "cap", role = Role.OUTPUT),
+                    i("Sleep quality", "clock", role = Role.MEDIATOR),
+                    i("Self-regulated learning", "book", role = Role.MEDIATOR),
+                    i("Self-control", "shield", role = Role.MODERATOR),
+                ),
+            )
+        },
+        Template("Freeform model", "Build your own from shapes and arrows") {
+            ModelDoc(title = "My custom model", layout = "freeform", freeform = starterFreeform())
+        },
         Template("Research process", "Five-step process with descriptions") {
             ModelDoc(
                 title = "Research design", center = "Mixed-methods study", layout = "process",

@@ -51,6 +51,9 @@ import androidx.compose.ui.unit.dp
 import scimodeler.core.IconDef
 import scimodeler.core.IconLibrary
 import scimodeler.core.ModelDoc
+import scimodeler.core.colorOf
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import scimodeler.ui.theme.LocalMotion
 import scimodeler.ui.theme.Tok
 import kotlin.math.roundToInt
@@ -71,46 +74,105 @@ fun IconPicker(
     onClose: () -> Unit,
 ) {
     val item = doc.items.getOrNull(itemIndex) ?: return
-    val current: IconDef = IconLibrary.get(item.icon) ?: IconLibrary.defaultFor(itemIndex)
-    val isDefault = item.icon == null && item.image == null
+    val density = LocalDensity.current.density
+    val key = Triple(item.icon, item.image?.hashCode(), doc.colorOf(itemIndex))
+    IconChooser(
+        title = "Icon", subtitle = item.label.ifBlank { "Item ${itemIndex + 1}" },
+        icon = item.icon, image = item.image, defaultIcon = IconLibrary.defaultFor(itemIndex),
+        recentImages = recentImages,
+        onPickIcon = onPickIcon, onChooseImage = onChooseImage, onPickImage = onPickImage, onRestoreDefault = onRestoreDefault, onClose = onClose,
+    ) {
+        listOf(true to 84.dp, false to 84.dp, true to 30.dp).forEach { (outlined, size) ->
+            val px = (size.value * density).roundToInt()
+            val bmp = remember(key, outlined, px, doc.style.theme, doc.style.gradients) { Bitmaps.node(doc, itemIndex, outlined, px) }
+            PreviewSlot(bmp, size, if (size < 40.dp) "Small" else if (outlined) "Outlined" else "Filled")
+        }
+    }
+}
+
+@Composable
+private fun PreviewSlot(bmp: androidx.compose.ui.graphics.ImageBitmap, size: Dp, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(end = 18.dp)) {
+        Box(Modifier.size(92.dp), contentAlignment = Alignment.Center) {
+            Image(bmp, null, Modifier.size(size), contentScale = ContentScale.Fit)
+        }
+        Text(label, style = Tok.T.tiny)
+    }
+}
+
+/** Icon chooser for a freeform element, previewing the element itself. */
+@Composable
+fun ElementIconPicker(
+    doc: ModelDoc,
+    element: scimodeler.core.FfElement,
+    recentImages: List<String>,
+    onPickIcon: (String) -> Unit,
+    onChooseImage: () -> Unit,
+    onPickImage: (String) -> Unit,
+    onRestoreDefault: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val density = LocalDensity.current.density
+    IconChooser(
+        title = "Icon", subtitle = element.displayName, icon = element.icon, image = element.image,
+        defaultIcon = IconLibrary.defaultFor(0), recentImages = recentImages,
+        onPickIcon = onPickIcon, onChooseImage = onChooseImage, onPickImage = onPickImage, onRestoreDefault = onRestoreDefault, onClose = onClose,
+    ) {
+        val px = (150 * density).roundToInt()
+        val bmp = remember(element, doc.style) {
+            scimodeler.core.ElementRaster.render(doc, element, px).toComposeImageBitmap()
+        }
+        Box(Modifier.size(width = 260.dp, height = 110.dp), contentAlignment = Alignment.Center) {
+            Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+        }
+    }
+}
+
+/**
+ * Shared icon chooser: built-in icon grid with search, custom image import with a live
+ * preview, previously imported images, and "restore default".
+ */
+@Composable
+fun IconChooser(
+    title: String,
+    subtitle: String,
+    icon: String?,
+    image: String?,
+    defaultIcon: IconDef,
+    recentImages: List<String>,
+    onPickIcon: (String) -> Unit,
+    onChooseImage: () -> Unit,
+    onPickImage: (String) -> Unit,
+    onRestoreDefault: () -> Unit,
+    onClose: () -> Unit,
+    previews: @Composable () -> Unit,
+) {
+    val current: IconDef = IconLibrary.get(icon) ?: defaultIcon
+    val isDefault = icon == null && image == null
     var query by remember { mutableStateOf("") }
     val results = remember(query) { IconLibrary.search(query) }
-    val density = LocalDensity.current.density
 
     Column(Modifier.width(660.dp).height(640.dp).padding(22.dp).testTag("icon-picker")) {
-        // Header
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Icon", style = Tok.T.display)
-                Text(item.label.ifBlank { "Item ${itemIndex + 1}" }, style = Tok.T.small, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(title, style = Tok.T.display)
+                Text(subtitle, style = Tok.T.small, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             IconBtn(Icons.Outlined.Close, "Close (Esc)", onClose, tag = "icon-close")
         }
         Spacer(Modifier.height(16.dp))
-
-        // Live preview
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(Tok.R.xl)).background(Tok.C.surface)
                 .border(1.dp, Tok.C.line, RoundedCornerShape(Tok.R.xl)).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val key = Triple(item.icon, item.image?.hashCode(), item.color)
-            listOf(true to 84.dp, false to 84.dp, true to 30.dp).forEach { (outlined, size) ->
-                val px = (size.value * density).roundToInt()
-                val bmp = remember(key, outlined, px, doc.style.theme, doc.style.gradients) { Bitmaps.node(doc, itemIndex, outlined, px) }
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(end = 18.dp)) {
-                    Box(Modifier.size(92.dp), contentAlignment = Alignment.Center) {
-                        Image(bmp, null, Modifier.size(size), contentScale = ContentScale.Fit)
-                    }
-                    Text(if (size < 40.dp) "Small" else if (outlined) "Outlined" else "Filled", style = Tok.T.tiny)
-                }
-            }
+            previews()
             Spacer(Modifier.weight(1f))
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 AppButton("Choose image…", onChooseImage, icon = Icons.Outlined.FileUpload, kind = ButtonKind.PRIMARY, tag = "icon-choose-image")
                 AppButton("Restore default", onRestoreDefault, icon = Icons.Outlined.RestartAlt, kind = ButtonKind.GHOST, enabled = !isDefault, tag = "icon-restore-default")
                 Text(
-                    when { item.image != null -> "Custom image"; item.icon != null -> current.name; else -> "Default · ${current.name}" },
+                    when { image != null -> "Custom image"; icon != null -> current.name; else -> "Default · ${current.name}" },
                     style = Tok.T.tiny,
                 )
             }
@@ -120,7 +182,7 @@ fun IconPicker(
             SectionHeader("Your images")
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(recentImages) { b64 ->
-                    Tile(selected = item.image == b64, size = 52.dp, tip = "Use this image", onClick = { onPickImage(b64) }) {
+                    Tile(selected = image == b64, size = 52.dp, tip = "Use this image", onClick = { onPickImage(b64) }) {
                         IconGlyph(null, b64, Color.Black, 34.dp)
                     }
                 }
@@ -142,7 +204,7 @@ fun IconPicker(
             modifier = Modifier.weight(1f),
         ) {
             items(results, key = { it.id }) { def ->
-                val sel = item.image == null && def.id == current.id
+                val sel = image == null && def.id == current.id
                 Tile(selected = sel, size = 76.dp, tip = def.name, tag = "icon-${def.id}", onClick = { onPickIcon(def.id) }) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         IconGlyph(def, null, if (sel) Tok.C.accent else Tok.C.text, 26.dp)

@@ -40,6 +40,7 @@ object Renderer {
             y += 36f
         }
         val bx = MARGIN + (contentW - body.w) / 2f
+        val bodyTop = y
         bodyPrims.forEach { out += it.translated(bx, y) }
         y += body.h
 
@@ -51,13 +52,13 @@ object Renderer {
             val textW = lines.maxOf { m.width(it, ls, false) }
             val bw = textW + 48f
             val bh = lines.size * ls * 1.3f + 30f
-            out += Prim.Shape(PathData.roundRect(W / 2f - bw / 2f, y, bw, bh, 18f), Paint.Solid(Ink.panel))
+            out += Prim.Shape(PathData.roundRect(W / 2f - bw / 2f, y, bw, bh, 18f), Paint.Solid(Themes.get(doc.style.theme).panel))
             out += Prim.Text(lines, W / 2f, y + bh / 2f, ls, Ink.subtle, lineHeight = 1.3f)
             y += bh
         }
         val H = y + MARGIN
-        val bg = if (doc.style.transparentBackground) null else Ink.white
-        return Scene(W, H, bg, out, doc.style.fontFamily)
+        val bg = if (doc.style.transparentBackground) null else Themes.get(doc.style.theme).background
+        return Scene(W, H, bg, out, doc.style.fontFamily, bodyX = bx, bodyY = bodyTop)
     }
 
     // ------------------------------------------------------------ AWT / PNG
@@ -98,8 +99,11 @@ object Renderer {
                 is Prim.Image -> {
                     Images.decode(p.base64)?.let { img ->
                         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+                        val saved = g.transform
+                        if (p.rotation != 0f) g.rotate(rad(p.rotation), (p.x + p.w / 2f).toDouble(), (p.y + p.h / 2f).toDouble())
                         val at = AffineTransform(p.w / img.width, 0f, 0f, p.h / img.height, p.x, p.y)
                         g.drawImage(img, at, null)
+                        g.transform = saved
                     }
                 }
                 is Prim.Text -> {
@@ -184,7 +188,7 @@ object Renderer {
             }
             is Prim.Image -> {
                 val href = "data:image/png;base64,${p.base64}"
-                bodySb.append("""<image x="${n(p.x)}" y="${n(p.y)}" width="${n(p.w)}" height="${n(p.h)}" preserveAspectRatio="xMidYMid meet" href="$href" xlink:href="$href"/>""").append('\n')
+                bodySb.append("""<image x="${n(p.x)}" y="${n(p.y)}" width="${n(p.w)}" height="${n(p.h)}" preserveAspectRatio="xMidYMid meet"${if (p.rotation != 0f) " transform=\"rotate(${n(p.rotation)} ${n(p.x + p.w / 2f)} ${n(p.y + p.h / 2f)})\"" else ""} href="$href" xlink:href="$href"/>""").append('\n')
             }
             is Prim.Text -> {
                 val anchor = when (p.align) { Align.START -> "start"; Align.CENTER -> "middle"; Align.END -> "end" }

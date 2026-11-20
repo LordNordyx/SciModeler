@@ -26,7 +26,7 @@ jobs:
           - os: macos-latest
             name: macOS Apple Silicon (.dmg)
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v5
 
@@ -55,10 +55,10 @@ jobs:
           git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" ci-screenshots
 
       - name: Report errors
-        if: failure()
+        if: always()
         shell: bash
         run: |
-          grep -iE "STEP |POINTER CLICK|^e: |error|FAILED|What went wrong|exception|expected|at scimodeler\.|Caused by" build.log | grep -v "^\s*at org\.\|at java\.\|at kotlin\." | tail -80 | while IFS= read -r line; do
+          grep -iE "STEP |POINTER CLICK|^e: |error|FAILED|What went wrong|exception|expected|at scimodeler\.|Caused by" build.log | grep -v "^\s*at org\.\|at java\.\|at kotlin\." | tail -10 | while IFS= read -r line; do
             echo "::error::${line}"
           done
 

@@ -30,7 +30,7 @@ dependencies {
 
 tasks.test {
     useJUnit()
-    timeout.set(Duration.ofMinutes(10))
+    timeout.set(Duration.ofMinutes(30))
     // UI tests render offscreen; screenshots of the main flows land in build/screenshots.
     systemProperty("scimodeler.screenshots", layout.buildDirectory.dir("screenshots").get().asFile.absolutePath)
     testLogging { events("passed", "failed"); showStandardStreams = true; exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL }

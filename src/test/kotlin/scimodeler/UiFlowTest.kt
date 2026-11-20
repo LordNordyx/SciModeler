@@ -90,7 +90,7 @@ class UiFlowTest {
             assertEquals(2.0, decoded.width.toDouble() / decoded.height, 0.02, "aspect ratio preserved")
             shot("02-custom-icon-in-picker")
             onNodeWithTag("icon-close").performClick()
-            waitUntil(8000) { SessionStore.load()?.doc?.items?.firstOrNull()?.image == image }
+            waitUntil(timeoutMillis = 8000) { SessionStore.load()?.doc?.items?.firstOrNull()?.image == image }
             shot("03-custom-icon-in-model")
 
             // 3. Restart: a fresh editor restored from the saved session.
@@ -110,7 +110,7 @@ class UiFlowTest {
             assertNull(state.doc.items[0].icon)
             shot("05-default-restored")
             onNodeWithTag("icon-close").performClick()
-            waitUntil(8000) { SessionStore.load()?.doc?.items?.firstOrNull()?.image == null }
+            waitUntil(timeoutMillis = 8000) { SessionStore.load()?.doc?.items?.firstOrNull()?.image == null }
 
             state = initialState()
             generation.value++

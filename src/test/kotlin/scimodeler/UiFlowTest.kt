@@ -44,15 +44,20 @@ import kotlin.test.assertNull
 class UiFlowTest {
     private val shots = File(System.getProperty("scimodeler.screenshots") ?: "build/screenshots").apply { mkdirs() }
 
+    private val t0 = System.currentTimeMillis()
+    private fun step(msg: String) = println("STEP +${(System.currentTimeMillis() - t0) / 1000}s $msg")
+
     private fun DesktopComposeUiTest.settle() = repeat(8) { Thread.sleep(150); waitForIdle() }
 
     private fun DesktopComposeUiTest.shot(name: String) {
+        step("shot $name")
         settle()
         ImageIO.write(onAllNodes(isRoot()).onFirst().captureToImage().toAwtImage(), "png", File(shots, "$name.png"))
     }
 
     /** Clicks a node; if the expected result doesn't appear, reports it and falls back to the semantic click. */
     private fun DesktopComposeUiTest.click(tag: String, expectTag: String? = null, expect: (() -> Boolean)? = null) {
+        step("click $tag")
         onNodeWithTag(tag).performClick()
         parkPointer()
         settle()
@@ -66,10 +71,15 @@ class UiFlowTest {
     }
 
     private fun DesktopComposeUiTest.selectModel(id: String) {
+        step("scroll to $id")
         onNodeWithTag("model-gallery").performScrollToNode(hasTestTag("model-card-$id"))
+        step("click model $id")
         onNodeWithTag("model-card-$id").performClick()
+        step("park pointer")
         parkPointer()
+        step("idle after $id")
         waitForIdle()
+        step("selected $id")
     }
 
     /** Moves the pointer to an empty part of the canvas, like a user would after clicking. */
@@ -114,13 +124,16 @@ class UiFlowTest {
             assertEquals(2.0, decoded.width.toDouble() / decoded.height, 0.02, "aspect ratio preserved")
             shot("02-custom-icon-in-picker")
             click("icon-close", expect = { onAllNodesWithTag("icon-picker").fetchSemanticsNodes().isEmpty() })
+            step("wait for session")
             waitUntil(timeoutMillis = 8000) { SessionStore.load()?.doc?.items?.firstOrNull()?.image == image }
             shot("03-custom-icon-in-model")
 
             // 3. Restart: a fresh editor restored from the saved session.
+            step("restart")
             state = initialState()
             generation.value++
             waitForIdle()
+            step("restarted")
             assertEquals("branches", state.doc.layout)
             assertEquals(image, state.doc.items[0].image, "custom icon survives restart")
             shot("04-after-restart")
@@ -132,11 +145,14 @@ class UiFlowTest {
             assertNull(state.doc.items[0].icon)
             shot("05-default-restored")
             click("icon-close", expect = { onAllNodesWithTag("icon-picker").fetchSemanticsNodes().isEmpty() })
+            step("wait for session")
             waitUntil(timeoutMillis = 8000) { SessionStore.load()?.doc?.items?.firstOrNull()?.image == null }
 
+            step("restart")
             state = initialState()
             generation.value++
             waitForIdle()
+            step("restarted")
             assertNull(state.doc.items[0].image, "default icon survives restart")
 
             // 5. Built-in icon choice.

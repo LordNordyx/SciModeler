@@ -58,7 +58,7 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          grep -iE "POINTER CLICK|^e: |error|FAILED|What went wrong|exception|expected|at scimodeler\.|Caused by" build.log | grep -v "^\s*at org\.\|at java\.\|at kotlin\." | head -60 | while IFS= read -r line; do
+          grep -iE "STEP |POINTER CLICK|^e: |error|FAILED|What went wrong|exception|expected|at scimodeler\.|Caused by" build.log | grep -v "^\s*at org\.\|at java\.\|at kotlin\." | tail -80 | while IFS= read -r line; do
             echo "::error::${line}"
           done
 

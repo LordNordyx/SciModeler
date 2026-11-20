@@ -59,7 +59,7 @@ jobs:
         shell: bash
         run: |
           grep -iE "STEP |POINTER CLICK|^e: |error|FAILED|What went wrong|exception|expected|at scimodeler\.|Caused by" build.log | grep -v "^\s*at org\.\|at java\.\|at kotlin\." | tail -10 | while IFS= read -r line; do
-            echo "::error::${line}"
+            echo "::${{ job.status == 'success' && 'notice' || 'error' }}::${line}"
           done
 
       - uses: actions/upload-artifact@v4

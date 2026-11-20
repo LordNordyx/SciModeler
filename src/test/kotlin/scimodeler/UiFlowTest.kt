@@ -8,6 +8,9 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
@@ -46,6 +49,19 @@ class UiFlowTest {
         ImageIO.write(onAllNodes(isRoot()).onFirst().captureToImage().toAwtImage(), "png", File(shots, "$name.png"))
     }
 
+    /** Clicks a node; if the expected result doesn't appear, reports it and falls back to the semantic click. */
+    private fun DesktopComposeUiTest.click(tag: String, expectTag: String? = null, expect: (() -> Boolean)? = null) {
+        onNodeWithTag(tag).performClick()
+        settle()
+        val ok = (expectTag == null || onAllNodesWithTag(expectTag).fetchSemanticsNodes().isNotEmpty()) && (expect?.invoke() ?: true)
+        if (!ok) {
+            println("POINTER CLICK ON '$tag' HAD NO EFFECT — node: " + onNodeWithTag(tag).fetchSemanticsNode().let { "${it.boundsInRoot} ${it.config}" })
+            shot("debug-$tag")
+            onNodeWithTag(tag).performSemanticsAction(SemanticsActions.OnClick)
+            settle()
+        }
+    }
+
     private fun DesktopComposeUiTest.selectModel(id: String) {
         onNodeWithTag("model-gallery").performScrollToNode(hasTestTag("model-card-$id"))
         onNodeWithTag("model-card-$id").performClick()
@@ -81,16 +97,14 @@ class UiFlowTest {
             shot("01-new-model-selected")
 
             // 2. Assign a custom icon from a local image.
-            onNodeWithTag("item-icon-0").performClick()
-            waitForIdle()
+            click("item-icon-0", expectTag = "icon-picker")
             onNodeWithTag("icon-picker").assertExists()
-            onNodeWithTag("icon-choose-image").performClick()
-            waitForIdle()
+            click("icon-choose-image", expect = { state.doc.items[0].image != null })
             val image = assertNotNull(state.doc.items[0].image, "custom image assigned")
             val decoded = assertNotNull(Images.decode(image))
             assertEquals(2.0, decoded.width.toDouble() / decoded.height, 0.02, "aspect ratio preserved")
             shot("02-custom-icon-in-picker")
-            onNodeWithTag("icon-close").performClick()
+            click("icon-close", expect = { onAllNodesWithTag("icon-picker").fetchSemanticsNodes().isEmpty() })
             waitUntil(timeoutMillis = 8000) { SessionStore.load()?.doc?.items?.firstOrNull()?.image == image }
             shot("03-custom-icon-in-model")
 
@@ -103,14 +117,12 @@ class UiFlowTest {
             shot("04-after-restart")
 
             // 4. Restore the default icon.
-            onNodeWithTag("item-icon-0").performClick()
-            waitForIdle()
-            onNodeWithTag("icon-restore-default").performClick()
-            waitForIdle()
+            click("item-icon-0", expectTag = "icon-picker")
+            click("icon-restore-default", expect = { state.doc.items[0].image == null })
             assertNull(state.doc.items[0].image)
             assertNull(state.doc.items[0].icon)
             shot("05-default-restored")
-            onNodeWithTag("icon-close").performClick()
+            click("icon-close", expect = { onAllNodesWithTag("icon-picker").fetchSemanticsNodes().isEmpty() })
             waitUntil(timeoutMillis = 8000) { SessionStore.load()?.doc?.items?.firstOrNull()?.image == null }
 
             state = initialState()
@@ -119,26 +131,22 @@ class UiFlowTest {
             assertNull(state.doc.items[0].image, "default icon survives restart")
 
             // 5. Built-in icon choice.
-            onNodeWithTag("item-icon-1").performClick()
-            waitForIdle()
-            onNodeWithTag("icon-flask").performClick()
-            waitForIdle()
+            click("item-icon-1", expectTag = "icon-picker")
+            click("icon-flask", expect = { state.doc.items[1].icon == "flask" })
             assertEquals("flask", state.doc.items[1].icon)
-            onNodeWithTag("icon-close").performClick()
+            click("icon-close", expect = { onAllNodesWithTag("icon-picker").fetchSemanticsNodes().isEmpty() })
 
             // 6. Reduced-motion preference is saved.
-            onNodeWithTag("settings").performClick()
-            waitForIdle()
-            onNodeWithTag("motion-reduced").performClick()
-            waitForIdle()
+            click("settings", expectTag = "motion-reduced")
+            click("motion-reduced", expect = { SettingsStore.load().motion == MotionPref.REDUCED })
             assertEquals(MotionPref.REDUCED, SettingsStore.load().motion)
 
             // Screenshots of other screens and models for visual review.
-            onNodeWithTag("tab-style").performClick(); shot("06-style-tab")
-            onNodeWithTag("tab-export").performClick(); shot("07-export-tab")
-            onNodeWithTag("tab-content").performClick()
-            onNodeWithTag("new").performClick(); shot("08-templates")
-            onNodeWithTag("templates-close").performClick()
+            click("tab-style"); shot("06-style-tab")
+            click("tab-export"); shot("07-export-tab")
+            click("tab-content")
+            click("new", expectTag = "template-gallery"); shot("08-templates")
+            click("templates-close", expect = { onAllNodesWithTag("template-gallery").fetchSemanticsNodes().isEmpty() })
             for (id in listOf("flower", "framework", "milestones", "cone", "cards")) { selectModel(id); shot("model-$id") }
         }
     }

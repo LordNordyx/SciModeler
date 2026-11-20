@@ -2,8 +2,8 @@ package scimodeler.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -201,14 +201,15 @@ fun Overlay(visible: Boolean, onDismiss: () -> Unit, content: @Composable () -> 
     val motion = LocalMotion.current
     AnimatedVisibility(visible, enter = motion.fade(), exit = motion.fadeOutT()) {
         Box(
+            // Pointer handling (not `clickable`) so the overlay's content keeps its own accessibility nodes.
             Modifier.fillMaxSize().background(Tok.C.scrim)
-                .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
+                .pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) },
             contentAlignment = Alignment.Center,
         ) {
             Box(
                 Modifier.animateEnterExit(enter = motion.popIn(), exit = motion.popOut())
                     .glass(RoundedCornerShape(26.dp), Tok.C.glassStrong, elevation = 30.dp)
-                    .clickable(remember { MutableInteractionSource() }, indication = null) {},
+                    .pointerInput(Unit) { detectTapGestures { } },
             ) { content() }
         }
     }

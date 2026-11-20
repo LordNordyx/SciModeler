@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -86,7 +85,8 @@ fun PreviewCard(
                 if (thumbnail != null) {
                     Image(thumbnail, title, Modifier.fillMaxSize().padding(10.dp), contentScale = ContentScale.Fit)
                 } else {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tok.C.text3)
+                    // Static placeholder while the live thumbnail renders (no endless animation).
+                    Box(Modifier.fillMaxSize().padding(18.dp).clip(RoundedCornerShape(Tok.R.md)).background(Tok.C.surfaceSunken))
                 }
                 androidx.compose.animation.AnimatedVisibility(
                     visible = selected, enter = motion.popIn(), exit = motion.popOut(),

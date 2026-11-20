@@ -8,7 +8,8 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.runDesktopComposeUiTest
@@ -42,7 +43,7 @@ class UiFlowTest {
 
     private fun DesktopComposeUiTest.shot(name: String) {
         settle()
-        ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(shots, "$name.png"))
+        ImageIO.write(onAllNodes(isRoot()).onFirst().captureToImage().toAwtImage(), "png", File(shots, "$name.png"))
     }
 
     private fun DesktopComposeUiTest.selectModel(id: String) {
